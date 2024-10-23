@@ -3,6 +3,7 @@ module github.com/TheBigRoomXXL/backlinks-engine
 go 1.23.2
 
 require (
+	github.com/PuerkitoBio/purell v1.2.1
 	github.com/gocolly/colly v1.2.0
 	github.com/goware/urlx v0.3.2
 	github.com/mattn/go-sqlite3 v1.14.24
@@ -10,8 +11,6 @@ require (
 
 require (
 	github.com/PuerkitoBio/goquery v1.10.0 // indirect
-	github.com/PuerkitoBio/purell v1.2.1 // indirect
-	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/andybalholm/cascadia v1.3.2 // indirect
 	github.com/antchfx/htmlquery v1.3.3 // indirect
 	github.com/antchfx/xmlquery v1.4.2 // indirect
