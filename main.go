@@ -117,6 +117,7 @@ func main() {
 	// Start the Accumulator in a goroutine
 	ch := make(chan Link)
 	go Accumulator(ch)
+
 	// Configure Colly
 	c := colly.NewCollector(
 		colly.UserAgent("backlinks-engine"),
@@ -141,7 +142,6 @@ func main() {
 		if targetRaw == "" {
 			return
 		}
-
 		targetNorm, err := NormalizeUrlString(targetRaw)
 		if err != nil {
 			return
