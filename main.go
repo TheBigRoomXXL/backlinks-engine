@@ -1,13 +1,16 @@
 package main
 
 import (
-	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
+	"github.com/PuerkitoBio/purell"
 	"github.com/gocolly/colly"
 	"github.com/goware/urlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -17,9 +20,8 @@ var db *sql.DB
 var err error
 
 type Link struct {
-	Target_normalized string
-	Target            string
-	Source            float32
+	Target string
+	Source string
 }
 
 func initSqlite() {
@@ -42,7 +44,6 @@ func initSqlite() {
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS links (
 			id INTEGER PRIMARY KEY AUTOINCREMENT, 
-			target_normalized TEXT NOT NULL,
 			target TEXT NOT NULL, 
 			source TEXT NOT NULL
 		)
@@ -52,10 +53,70 @@ func initSqlite() {
 	}
 }
 
+func Accumulator(ch <-chan Link) {
+
+	batchSize := 1024
+	var batch = make([]Link, 0, batchSize)
+	for v := range ch {
+		batch = append(batch, v)
+		if len(batch) == batchSize { // full
+			BulkInsertLinks(batch)
+			batch = make([]Link, 0, batchSize) // reset
+		}
+	}
+}
+
+func BulkInsertLinks(links []Link) {
+	// Start building the bulk insert statement
+	var values []string
+	var args []interface{}
+
+	for _, link := range links {
+		values = append(values, "(?, ?)")
+		args = append(args, link.Target, link.Source)
+	}
+
+	// Combine into a single statement
+	stmt := fmt.Sprintf(
+		"INSERT INTO links (target, source) VALUES %s", strings.Join(values, ","),
+	)
+
+	// Prepare the statement
+	preparedStmt, err := db.Prepare(stmt)
+	if err != nil {
+		log.Println(err)
+	}
+	defer preparedStmt.Close()
+
+	// Execute the statement with all arguments
+	_, err = preparedStmt.Exec(args...)
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+func NormalizeUrlString(urlRaw string) (string, error) {
+	url, err := urlx.Parse(urlRaw)
+	if err != nil {
+		return "", err
+	}
+	return NormalizeURL(url)
+}
+
+func NormalizeURL(url *url.URL) (string, error) {
+	url.RawQuery = ""
+	url.User = nil
+	flags := purell.FlagsSafe | purell.FlagDecodeDWORDHost | purell.FlagDecodeOctalHost | purell.FlagDecodeHexHost | purell.FlagRemoveUnnecessaryHostDots | purell.FlagRemoveEmptyPortSeparator
+	return purell.NormalizeURL(url, flags), nil
+}
+
 func main() {
 	initSqlite()
 	defer db.Close()
 
+	// Start the Accumulator in a goroutine
+	ch := make(chan Link)
+	go Accumulator(ch)
 	// Configure Colly
 	c := colly.NewCollector(
 		colly.UserAgent("backlinks-engine"),
@@ -75,29 +136,42 @@ func main() {
 
 	// Add Response handler
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
+		// Prepare target value
 		targetRaw := e.Request.AbsoluteURL(e.Attr("href"))
 		if targetRaw == "" {
 			return
 		}
 
-		targetNorm, err := urlx.NormalizeString(targetRaw)
+		targetNorm, err := NormalizeUrlString(targetRaw)
 		if err != nil {
 			return
 		}
 
-		_, err = db.ExecContext(
-			context.Background(),
-			`INSERT INTO links (target_normalized, target, source) VALUES (?,?,?);`,
-			targetNorm, targetRaw, e.Request.URL.String(),
-		)
+		// Prepare source vlaue
+		source, err := NormalizeURL(e.Request.URL)
 		if err != nil {
-			log.Println("Error", err)
+			return
 		}
+
+		// Push link in the queue
+		link := Link{
+			Target: targetNorm,
+			Source: source,
+		}
+		ch <- link
+
 		e.Request.Visit(targetNorm)
+	})
+
+	c.OnRequest(func(r *colly.Request) {
+		fmt.Println("Visiting", r.URL)
 	})
 
 	// Run
 	c.Visit("https://lovergne.dev")
 	c.Visit("https://en.wikipedia.org/wiki/Ted_Nelson")
+	c.Visit("https://www.lemonde.fr/")
+	c.Visit("https://www.bbc.com/")
+
 	c.Wait()
 }
