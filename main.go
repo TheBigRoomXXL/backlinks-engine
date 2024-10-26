@@ -46,7 +46,9 @@ func initSqlite() {
 			id INTEGER PRIMARY KEY AUTOINCREMENT, 
 			target TEXT NOT NULL, 
 			source TEXT NOT NULL
-		)
+		);
+		CREATE UNIQUE INDEX IF NOT EXISTS links_target_source_idx ON links (target, source);
+		CREATE INDEX IF NOT EXISTS target_idx ON links (target);
 	`)
 	if err != nil {
 		log.Fatal(err)
@@ -54,7 +56,6 @@ func initSqlite() {
 }
 
 func Accumulator(ch <-chan Link) {
-
 	batchSize := 1024
 	var batch = make([]Link, 0, batchSize)
 	for v := range ch {
@@ -78,7 +79,7 @@ func BulkInsertLinks(links []Link) {
 
 	// Combine into a single statement
 	stmt := fmt.Sprintf(
-		"INSERT INTO links (target, source) VALUES %s", strings.Join(values, ","),
+		"INSERT  INTO links (target, source) VALUES %s ON CONFLICT DO NOTHING", strings.Join(values, ","),
 	)
 
 	// Prepare the statement
@@ -163,9 +164,9 @@ func main() {
 		e.Request.Visit(targetNorm)
 	})
 
-	c.OnRequest(func(r *colly.Request) {
-		fmt.Println("Visiting", r.URL)
-	})
+	// c.OnRequest(func(r *colly.Request) {
+	// 	fmt.Println("Visiting", r.URL)
+	// })
 
 	// Run
 	c.Visit("https://lovergne.dev")
