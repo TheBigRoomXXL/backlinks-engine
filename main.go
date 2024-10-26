@@ -123,7 +123,7 @@ func main() {
 	c := colly.NewCollector(
 		colly.UserAgent("backlinks-engine"),
 		colly.MaxBodySize(1024*1024),
-		colly.CacheDir(".colly-cache"),
+		colly.CacheDir("data/colly-cache"),
 		colly.Async(true),
 	)
 	c.WithTransport(&http.Transport{
@@ -135,6 +135,12 @@ func main() {
 	c.Limit(&colly.LimitRule{
 		Delay: 5 * time.Second,
 	})
+
+	err = c.SetStorage(&CollySQLStorage{})
+	if err != nil {
+		fmt.Print("here")
+		log.Fatal(err)
+	}
 
 	// Add Response handler
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
@@ -168,11 +174,33 @@ func main() {
 	// 	fmt.Println("Visiting", r.URL)
 	// })
 
-	// Run
+	// First run seeds
 	c.Visit("https://lovergne.dev")
 	c.Visit("https://en.wikipedia.org/wiki/Ted_Nelson")
 	c.Visit("https://www.lemonde.fr/")
 	c.Visit("https://www.bbc.com/")
 
+	// Next run re-create queue
+	rows, err := db.Query(`
+		SELECT target 
+		FROM links 
+		WHERE target NOT IN (SELECT source FROM links) LIMIT 1000;
+	`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var not_visited string
+		err = rows.Scan(&not_visited)
+		if err != nil {
+			log.Fatal()
+		}
+		c.Visit(not_visited)
+	}
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Print("wait")
 	c.Wait()
 }
