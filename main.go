@@ -4,9 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"net"
-	"net/http"
 	"net/url"
+	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -56,6 +56,7 @@ func initSqlite() {
 }
 
 func MetricLogger(req <-chan struct{}, err <-chan error) {
+	l := log.New(os.Stderr, "", log.Ldate|log.Ltime)
 	ticker := time.NewTicker(1 * time.Second)
 	requests := 0
 	errors := 0
@@ -75,7 +76,8 @@ func MetricLogger(req <-chan struct{}, err <-chan error) {
 				requests++
 			case e := <-err:
 				errors++
-				if strings.Contains(e.Error(), "timeout") {
+				l.Println(e.Error())
+				if strings.Contains(strings.ToLower(e.Error()), "timeout") {
 					timeouts++
 				}
 			}
@@ -153,25 +155,27 @@ func main() {
 	go MetricLogger(counterRequest, counterError)
 
 	// Configure Colly
+	// We only want like with http(s) and a domaine name, no direct IP.
+	urlRegex := regexp.MustCompile(`^(http|https):\/\/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}`)
 	c := colly.NewCollector(
 		colly.UserAgent("backlinks-engine"),
 		colly.MaxBodySize(1024*1024),
-		colly.CacheDir("data/colly-cache"),
 		colly.Async(true),
+		colly.URLFilters(urlRegex),
+		// colly.CacheDir("data/colly-cache"),
 	)
-	c.WithTransport(&http.Transport{
-		DisableKeepAlives: true,
-		DialContext: (&net.Dialer{
-			Timeout: 5 * time.Second,
-		}).DialContext,
-	})
+	c.SetRequestTimeout(
+		5 * time.Second,
+	)
+
 	c.Limit(&colly.LimitRule{
-		Delay: 5 * time.Second,
+		Parallelism: 2,
+		Delay:       5 * time.Second,
+		RandomDelay: 5 * time.Second,
 	})
 
 	err = c.SetStorage(&CollySQLStorage{})
 	if err != nil {
-		fmt.Print("here")
 		log.Fatal(err)
 	}
 
@@ -213,9 +217,11 @@ func main() {
 
 	// First run seeds
 	c.Visit("https://lovergne.dev")
-	c.Visit("https://en.wikipedia.org/wiki/Ted_Nelson")
-	c.Visit("https://www.lemonde.fr/")
-	c.Visit("https://www.bbc.com/")
+	// c.Visit("https://en.wikipedia.org/wiki/Ted_Nelson")
+	// c.Visit("https://www.lemonde.fr/")
+	// c.Visit("https://www.bbc.com/")
+	c.Visit("https://www.theguardian.com/europe/")
+	c.Visit("https://www.liberation.fr/")
 
 	// Next run re-create queue
 	rows, err := db.Query(`
@@ -238,7 +244,6 @@ func main() {
 	if err := rows.Err(); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Print("wait")
 	c.Wait()
 	fmt.Println("OMG! NOT MORE LINKS TO VISIT! DID WE JUST CRAWLED THE ENTIRE INTERNET?!")
 }
