@@ -55,6 +55,34 @@ func initSqlite() {
 	}
 }
 
+func MetricLogger(req <-chan struct{}, err <-chan error) {
+	ticker := time.NewTicker(1 * time.Second)
+	requests := 0
+	errors := 0
+	timeouts := 0
+	fmt.Println("┌───────────────┬───────────────┬───────────────┐")
+	fmt.Println("│   requests    │    errors     │   timeouts    │")
+	fmt.Println("├───────────────┼───────────────┼───────────────┤")
+	for {
+		for {
+			select {
+			case <-ticker.C:
+				fmt.Printf(
+					"│ %13d │ %13d │ %13d │\n",
+					requests, errors, timeouts,
+				)
+			case <-req:
+				requests++
+			case e := <-err:
+				errors++
+				if strings.Contains(e.Error(), "timeout") {
+					timeouts++
+				}
+			}
+		}
+	}
+}
+
 func Accumulator(ch <-chan Link) {
 	batchSize := 1024
 	var batch = make([]Link, 0, batchSize)
@@ -116,8 +144,13 @@ func main() {
 	defer db.Close()
 
 	// Start the Accumulator in a goroutine
-	ch := make(chan Link)
-	go Accumulator(ch)
+	linksAccumulator := make(chan Link)
+	go Accumulator(linksAccumulator)
+
+	// Start the MetricLogger in a goroutine
+	counterRequest := make(chan struct{})
+	counterError := make(chan error)
+	go MetricLogger(counterRequest, counterError)
 
 	// Configure Colly
 	c := colly.NewCollector(
@@ -165,14 +198,18 @@ func main() {
 			Target: targetNorm,
 			Source: source,
 		}
-		ch <- link
+		linksAccumulator <- link
 
 		e.Request.Visit(targetNorm)
 	})
 
-	// c.OnRequest(func(r *colly.Request) {
-	// 	fmt.Println("Visiting", r.URL)
-	// })
+	c.OnRequest(func(r *colly.Request) {
+		counterRequest <- struct{}{}
+	})
+
+	c.OnError(func(r *colly.Response, err error) {
+		counterError <- err
+	})
 
 	// First run seeds
 	c.Visit("https://lovergne.dev")
@@ -203,4 +240,5 @@ func main() {
 	}
 	fmt.Print("wait")
 	c.Wait()
+	fmt.Println("OMG! NOT MORE LINKS TO VISIT! DID WE JUST CRAWLED THE ENTIRE INTERNET?!")
 }
