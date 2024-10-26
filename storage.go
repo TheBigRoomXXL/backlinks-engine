@@ -2,25 +2,35 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
 	"sync"
+
+	"github.com/golang/groupcache/lru"
 )
 
-// CollySQLStorage reuse the implemention of the InMemoryStorage from colly for cookies
-// but use sqlite for visited sites
+// CollySQLStorage reuse the implemention of the InMemoryStorage but with more features:
+//   - Limit allocation for `visited` with an LRU Cache
+//   - Persiste visited sites in sqlite
 type CollySQLStorage struct {
-	db   *sql.DB
-	lock *sync.RWMutex
-	jar  *cookiejar.Jar
+	db      *sql.DB
+	visited *lru.Cache
+	lock    *sync.RWMutex
+	jar     *cookiejar.Jar
 }
 
 // Init initializes CollySQLStorage
 func (s *CollySQLStorage) Init() error {
 	//  Init in memory storage
+	if s.visited == nil {
+		// Each entry is 64 bits because keys are uint64 and values are struct{}.
+		// So if we want to allocate N bytes, then we can have N keys
+		// (I think, might be wrong, will test a some point)
+		allocatedBytes := 28 * 1024 * 1024 * 1024 // 28GB
+		s.visited = lru.New(allocatedBytes)
+	}
 	if s.lock == nil {
 		s.lock = &sync.RWMutex{}
 	}
@@ -30,6 +40,7 @@ func (s *CollySQLStorage) Init() error {
 			return err
 		}
 	}
+
 	// Init on sql storage
 	if s.db == nil {
 		s.db, err = sql.Open("sqlite3", "./data/colly.db")
@@ -63,22 +74,33 @@ func (s *CollySQLStorage) Init() error {
 
 // Visited implements Storage.Visited()
 func (s *CollySQLStorage) Visited(requestID uint64) error {
+	s.lock.Lock()
+	s.visited.Add(requestID, struct{}{})
+	s.lock.Unlock()
+
 	_, err := s.db.Exec(
 		`INSERT OR IGNORE INTO visited (url_hash) VALUES (?) ON CONFLICT DO NOTHING;`,
 		int(requestID),
 	)
-	fmt.Println("we have visited", err)
 	return err
 }
 
 // IsVisited implements Storage.IsVisited()
 func (s *CollySQLStorage) IsVisited(requestID uint64) (bool, error) {
+	// First check in memory cache
+	s.lock.Lock()
 	var exists bool
+	_, exists = s.visited.Get(requestID)
+	s.lock.Unlock()
+	if exists {
+		return exists, nil
+	}
+
+	// Then check disk
 	err := s.db.QueryRow(
 		`SELECT EXISTS(SELECT 1 FROM visited WHERE url_hash = ? LIMIT 1);`,
 		int(requestID),
 	).Scan(&exists)
-	fmt.Println("have we visited", requestID, "?", exists, err)
 	return exists, err
 }
 
