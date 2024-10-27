@@ -212,7 +212,8 @@ func main() {
 	})
 
 	c.OnError(func(r *colly.Response, err error) {
-		counterError <- err
+		msg := fmt.Errorf("%s: %s", r.Request.URL.Hostname(), err)
+		counterError <- msg
 	})
 
 	// First run seeds
