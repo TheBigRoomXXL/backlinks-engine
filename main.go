@@ -39,33 +39,29 @@ func initSqlite() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err := db.Exec(`
+
+	_, err = db.Exec(`
 		PRAGMA journal_mode = WAL;
 		PRAGMA synchronous = NORMAL;
 		PRAGMA busy_timeout = 5000;
 		PRAGMA cache_size = -20000;
 		PRAGMA foreign_keys = ON;
 		PRAGMA temp_store = MEMORY;
-	`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS links (
-			target_id INTEGER KEY, 
-			source_id INTEGER
-		);
-		CREATE UNIQUE INDEX IF NOT EXISTS link_target_source_idx ON links (target_id, source_id);
-		CREATE INDEX IF NOT EXISTS source_idx ON links (source_id);
 
 		CREATE TABLE IF NOT EXISTS urls (
-			sha1 INTEGER KEY, 
+			sha1 INTEGER, 
 			scheme TEXT,
 			host TEXT,
 			pathname TEXT,
-			fragment TEXT
+			fragment TEXT,
+			PRIMARY KEY (sha1)
 		);
+		CREATE TABLE IF NOT EXISTS links (
+			target_id INTEGER, 
+			source_id INTEGER,
+			PRIMARY KEY (target_id, source_id)
+		);
+
 	`)
 	if err != nil {
 		log.Fatal(err)
