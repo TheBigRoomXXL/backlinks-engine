@@ -16,14 +16,22 @@ import (
 	"github.com/nlnwa/whatwg-url/url"
 )
 
-const EDGE_BATCH_SIZE = 1024
+const BATCH_SIZE = 1024
 
 var db *sql.DB
 var err error
 
 type Link struct {
-	Target uint64
-	Source uint64
+	Target int64
+	Source int64
+}
+
+type UrlDb struct {
+	Sha1     int64
+	Scheme   string
+	Host     string
+	Pathname string
+	Fragment string
 }
 
 func initSqlite() {
@@ -45,11 +53,19 @@ func initSqlite() {
 
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS links (
-			target INTEGER KEY, 
-			source INTEGER
+			target_id INTEGER KEY, 
+			source_id INTEGER
 		);
-		CREATE UNIQUE INDEX IF NOT EXISTS link_target_source_idx ON links (target, source);
-		CREATE INDEX IF NOT EXISTS source_idx ON links (source);
+		CREATE UNIQUE INDEX IF NOT EXISTS link_target_source_idx ON links (target_id, source_id);
+		CREATE INDEX IF NOT EXISTS source_idx ON links (source_id);
+
+		CREATE TABLE IF NOT EXISTS urls (
+			sha1 INTEGER KEY, 
+			scheme TEXT,
+			host TEXT,
+			pathname TEXT,
+			fragment TEXT
+		);
 	`)
 	if err != nil {
 		log.Fatal(err)
@@ -92,13 +108,18 @@ func MetricLogger(reqChan <-chan struct{}, errChan <-chan error) {
 	}
 }
 
-func Accumulator(ch <-chan Link) {
-	var batch = [EDGE_BATCH_SIZE]Link{}
+func LinkAccumulator(ch <-chan [2]url.Url) {
+	var linksBatch = [BATCH_SIZE]Link{}
+	var urlsBatch = [BATCH_SIZE * 2]url.Url{}
 	i := 0
 	for v := range ch {
-		batch[i] = v
+		source, target := v[0], v[1]
+		urlsBatch[i] = source
+		urlsBatch[BATCH_SIZE+i] = target
+		linksBatch[i] = Link{GetUrlHash(source), GetUrlHash(target)}
 		if i == 1023 {
-			BulkInsertEdges(batch)
+			BulkInsertUrls(urlsBatch)
+			BulkInsertLinks(linksBatch)
 			i = 0
 		} else {
 			i++
@@ -106,7 +127,37 @@ func Accumulator(ch <-chan Link) {
 	}
 }
 
-func BulkInsertEdges(links [EDGE_BATCH_SIZE]Link) {
+func BulkInsertUrls(urls [2 * BATCH_SIZE]url.Url) {
+	// Start building the bulk insert statement
+	var values []string
+	var args []interface{}
+
+	for _, url := range urls {
+		values = append(values, "(?, ?, ?, ?, ?)")
+		args = append(args, GetUrlHash(url), url.Scheme(), url.Host(), url.Pathname(), url.Fragment())
+	}
+
+	// Combine into a single statement
+	stmt := fmt.Sprintf(
+		"INSERT  INTO urls (sha1, scheme, host, pathname, fragment) VALUES %s ON CONFLICT DO NOTHING",
+		strings.Join(values, ","),
+	)
+
+	// Prepare the statement
+	preparedStmt, err := db.Prepare(stmt)
+	if err != nil {
+		log.Println(err)
+	}
+	defer preparedStmt.Close()
+
+	// Execute the statement with all arguments
+	_, err = preparedStmt.Exec(args...)
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+func BulkInsertLinks(links [BATCH_SIZE]Link) {
 	// Start building the bulk insert statement
 	var values []string
 	var args []interface{}
@@ -118,7 +169,8 @@ func BulkInsertEdges(links [EDGE_BATCH_SIZE]Link) {
 
 	// Combine into a single statement
 	stmt := fmt.Sprintf(
-		"INSERT  INTO links (target, source) VALUES %s ON CONFLICT DO NOTHING", strings.Join(values, ","),
+		"INSERT INTO links (target_id, source_id) VALUES %s ON CONFLICT DO NOTHING",
+		strings.Join(values, ","),
 	)
 
 	// Prepare the statement
@@ -156,12 +208,12 @@ func NormalizeUrlString(urlRaw string) (*url.Url, error) {
 	return url, nil
 }
 
-func GetUrlHash(url *url.Url) uint64 {
+func GetUrlHash(url url.Url) int64 {
 	urlNormalized := url.Href(false)
 	h := sha1.New()
 	h.Write([]byte(urlNormalized))
 	hBytes := h.Sum(nil)
-	return binary.BigEndian.Uint64(hBytes)
+	return int64(binary.BigEndian.Uint64(hBytes))
 }
 
 func main() {
@@ -173,9 +225,9 @@ func main() {
 	counterError := make(chan error)
 	go MetricLogger(counterRequest, counterError)
 
-	// Start the Accumulator in a goroutine
-	linksAccumulator := make(chan Link)
-	go Accumulator(linksAccumulator)
+	// Start the accumulator in a goroutine
+	linksAccumulator := make(chan [2]url.Url)
+	go LinkAccumulator(linksAccumulator)
 
 	// Configure Colly
 	c := colly.NewCollector(
@@ -202,7 +254,7 @@ func main() {
 			// TODO Add metric for normalization error
 			return
 		}
-		linksAccumulator <- Link{GetUrlHash(source), GetUrlHash(target)}
+		linksAccumulator <- [2]url.Url{*source, *target}
 
 		e.Request.Visit(target.Href(false))
 	})
@@ -217,7 +269,6 @@ func main() {
 	})
 
 	// Start scraping on
-	// c.Visit("https://www.lemonde.fr/")
 	c.Visit("https://www.bbc.com/")
 	c.Visit("https://www.theguardian.com/europe/")
 	c.Visit("https://www.liberation.fr/")
