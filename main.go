@@ -155,6 +155,10 @@ func main() {
 	counterError := make(chan error)
 	go MetricLogger(counterRequest, counterError)
 
+	// Start the Accumulator in a goroutine
+	linksAccumulator := make(chan Link)
+	go Accumulator(linksAccumulator)
+
 	// Configure Colly
 	c := colly.NewCollector(
 		colly.Async(true),
@@ -165,6 +169,11 @@ func main() {
 	// Handlers
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
 		target := e.Attr("href")
+
+		linksAccumulator <- Link{
+			Source: e.Request.URL.String(),
+			Target: target,
+		}
 		e.Request.Visit(target)
 	})
 
@@ -178,7 +187,7 @@ func main() {
 	})
 
 	// Start scraping on
-	c.Visit("https://www.lemonde.fr/")
+	// c.Visit("https://www.lemonde.fr/")
 	c.Visit("https://www.bbc.com/")
 	c.Visit("https://www.theguardian.com/europe/")
 	c.Visit("https://www.liberation.fr/")
