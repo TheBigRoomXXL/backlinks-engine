@@ -12,6 +12,7 @@ import (
 
 	"github.com/PuerkitoBio/purell"
 	"github.com/gocolly/colly"
+	"github.com/gocolly/colly/queue"
 	"github.com/goware/urlx"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -55,26 +56,32 @@ func initSqlite() {
 	}
 }
 
-func MetricLogger(req <-chan struct{}, err <-chan error) {
-	l := log.New(os.Stderr, "", log.Ldate|log.Ltime)
+func MetricLogger(reqChan <-chan struct{}, errChan <-chan error) {
+	logFile, err := os.Create("errors.log")
+	if err != nil {
+		panic(err)
+	}
+	l := log.New(logFile, "", log.Ldate|log.Ltime)
 	ticker := time.NewTicker(1 * time.Second)
+	start := time.Now()
 	requests := 0
 	errors := 0
 	timeouts := 0
-	fmt.Println("┌───────────────┬───────────────┬───────────────┐")
-	fmt.Println("│   requests    │    errors     │   timeouts    │")
-	fmt.Println("├───────────────┼───────────────┼───────────────┤")
+	fmt.Println("┌───────────────┬───────────────┬───────────────┬───────────────┐")
+	fmt.Println("│     Time      │   requests    │    errors     │   timeouts    │")
+	fmt.Println("├───────────────┼───────────────┼───────────────┼───────────────┤")
 	for {
 		for {
 			select {
 			case <-ticker.C:
+				time := time.Since(start).Round(time.Second)
 				fmt.Printf(
-					"│ %13d │ %13d │ %13d │\n",
-					requests, errors, timeouts,
+					"│ %13s │ %13d │ %13d │ %13d │\n",
+					time, requests, errors, timeouts,
 				)
-			case <-req:
+			case <-reqChan:
 				requests++
-			case e := <-err:
+			case e := <-errChan:
 				errors++
 				l.Println(e.Error())
 				if strings.Contains(strings.ToLower(e.Error()), "timeout") {
@@ -160,24 +167,23 @@ func main() {
 	c := colly.NewCollector(
 		colly.UserAgent("backlinks-engine"),
 		colly.MaxBodySize(1024*1024),
-		colly.Async(true),
 		colly.URLFilters(urlRegex),
+		colly.Async(true),
 		// colly.CacheDir("data/colly-cache"),
 	)
+	c.Limit(&colly.LimitRule{
+		Parallelism: 1,
+		Delay:       5 * time.Second,
+		RandomDelay: 5 * time.Second,
+	})
 	c.SetRequestTimeout(
 		5 * time.Second,
 	)
 
-	c.Limit(&colly.LimitRule{
-		Parallelism: 2,
-		Delay:       5 * time.Second,
-		RandomDelay: 5 * time.Second,
-	})
-
-	err = c.SetStorage(&CollySQLStorage{})
-	if err != nil {
-		log.Fatal(err)
-	}
+	queue, _ := queue.New(
+		1, // Number of consumer threads
+		&queue.InMemoryQueueStorage{MaxSize: 1024 * 1024}, // Use default queue storage
+	)
 
 	// Add Response handler
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
@@ -217,34 +223,71 @@ func main() {
 	})
 
 	// First run seeds
-	c.Visit("https://lovergne.dev")
+	// c.Visit("https://lovergne.dev")
 	// c.Visit("https://en.wikipedia.org/wiki/Ted_Nelson")
 	// c.Visit("https://www.lemonde.fr/")
 	// c.Visit("https://www.bbc.com/")
-	c.Visit("https://www.theguardian.com/europe/")
-	c.Visit("https://www.liberation.fr/")
+	// c.Visit("https://www.theguardian.com/europe/")
+	// c.Visit("https://www.liberation.fr/")
+	queue.AddURL("https://lovergne.dev")
+	queue.AddURL("https://en.wikipedia.org/wiki/Ted_Nelson")
+	queue.AddURL("https://www.lemonde.fr/")
+	queue.AddURL("https://www.bbc.com/")
+	queue.AddURL("https://www.theguardian.com/europe/")
+	queue.AddURL("https://www.liberation.fr/")
+	// queue.AddURL("https://lovergne.dev/rss")
+	// queue.AddURL("https://htmx.org/atom")
+	// queue.AddURL("https://www.bitecode.dev")
+	// queue.AddURL("https://rednafi.com/index")
+	// queue.AddURL("https://blog.danslimmon.com")
+	// queue.AddURL("https://joshcollinsworth.com/api")
+	// queue.AddURL("http://feeds.feedburner.com")
+	// queue.AddURL("https://martinfowler.com/feed")
+	// queue.AddURL("https://notes.eatonphil.com")
+	// queue.AddURL("https://feeds.feedburner.com")
+	// queue.AddURL("https://research.swtch.com")
+	// queue.AddURL("https://sirupsen.com/atom")
+	// queue.AddURL("https://bitbashing.io/feed")
+	// queue.AddURL("https://andy-bell.co")
+	// queue.AddURL("https://words.filippo.io")
+	// queue.AddURL("http://len.falken.directory")
+	// queue.AddURL("https://lukeplant.me.uk")
+	// queue.AddURL("https://wizardzines.com/index")
+	// queue.AddURL("https://sethmlarson.dev/rss")
+	// queue.AddURL("https://www.petemillspaugh.com")
+	// queue.AddURL("https://jakelazaroff.com/rss")
+	// queue.AddURL("https://digest.browsertech.com")
+	// queue.AddURL("https://www.htmhell.dev")
+	// queue.AddURL("https://daniel.do/rss")
+	// queue.AddURL("https://buttondown.email/hillelwayne")
+	// queue.AddURL("https://cliffle.com/rss")
+	// queue.AddURL("https://journal.stuffwithstuff.com")
+	// queue.AddURL("https://ferd.ca/feed")
+	// queue.AddURL("https://tonsky.me/atom")
+	// queue.AddURL("https://chriscoyier.net/feed")
+	// queue.AddURL("https://hamvocke.com/feed")
+	// queue.AddURL("https://developer.mozilla.org")
+	// queue.AddURL("https://safjan.com/feeds")
+	// queue.AddURL("https://feeds.feedburner.com")
+	// queue.AddURL("https://brooker.co.za")
+	// queue.AddURL("https://ferd.ca/feed")
+	// queue.AddURL("https://blog.google/threat")
+	// queue.AddURL("https://solar.lowtechmagazine.com")
+	// queue.AddURL("https://kerkour.com/feed")
+	// queue.AddURL("https://neopythonic.blogspot.com")
+	// queue.AddURL("https://feeds.feedburner.com")
+	// queue.AddURL("https://blog.codingconfessions.com")
+	// queue.AddURL("https://j3s.sh/feed")
+	// queue.AddURL("https://blog.isosceles.com")
+	// queue.AddURL("https://dave.cheney.net")
+	// queue.AddURL("https://cargocollective.com/rss")
+	// queue.AddURL("https://www.somethingsimilar.com")
+	// queue.AddURL("https://ploum.net/atom_fr")
+	// queue.AddURL("https://wickstrom.tech/feed")
+	// queue.AddURL("https://research.swtch.com")
+	// queue.AddURL("https://samcurry.net/api")
 
-	// Next run re-create queue
-	rows, err := db.Query(`
-		SELECT target 
-		FROM links 
-		WHERE target NOT IN (SELECT source FROM links) LIMIT 1000;
-	`)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var not_visited string
-		err = rows.Scan(&not_visited)
-		if err != nil {
-			log.Fatal()
-		}
-		c.Visit(not_visited)
-	}
-	if err := rows.Err(); err != nil {
-		log.Fatal(err)
-	}
+	queue.Run(c)
 	c.Wait()
 	fmt.Println("OMG! NOT MORE LINKS TO VISIT! DID WE JUST CRAWLED THE ENTIRE INTERNET?!")
 }
