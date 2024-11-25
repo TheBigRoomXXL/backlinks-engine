@@ -1,26 +1,29 @@
 package main
 
 import (
+	"crypto/sha1"
 	"database/sql"
+	"encoding/binary"
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/PuerkitoBio/purell"
 	"github.com/gocolly/colly"
-	"github.com/goware/urlx"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/nlnwa/whatwg-url/canonicalizer"
+	"github.com/nlnwa/whatwg-url/url"
 )
+
+const EDGE_BATCH_SIZE = 1024
 
 var db *sql.DB
 var err error
 
 type Link struct {
-	Target string
-	Source string
+	Target uint64
+	Source uint64
 }
 
 func initSqlite() {
@@ -42,12 +45,11 @@ func initSqlite() {
 
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS links (
-			id INTEGER PRIMARY KEY AUTOINCREMENT, 
-			target TEXT NOT NULL, 
-			source TEXT NOT NULL
+			target INTEGER KEY, 
+			source INTEGER
 		);
-		CREATE UNIQUE INDEX IF NOT EXISTS links_target_source_idx ON links (target, source);
-		CREATE INDEX IF NOT EXISTS target_idx ON links (target);
+		CREATE UNIQUE INDEX IF NOT EXISTS link_target_source_idx ON links (target, source);
+		CREATE INDEX IF NOT EXISTS source_idx ON links (source);
 	`)
 	if err != nil {
 		log.Fatal(err)
@@ -91,25 +93,27 @@ func MetricLogger(reqChan <-chan struct{}, errChan <-chan error) {
 }
 
 func Accumulator(ch <-chan Link) {
-	batchSize := 1024
-	var batch = make([]Link, 0, batchSize)
+	var batch = [EDGE_BATCH_SIZE]Link{}
+	i := 0
 	for v := range ch {
-		batch = append(batch, v)
-		if len(batch) == batchSize { // full
-			BulkInsertLinks(batch)
-			batch = make([]Link, 0, batchSize) // reset
+		batch[i] = v
+		if i == 1023 {
+			BulkInsertEdges(batch)
+			i = 0
+		} else {
+			i++
 		}
 	}
 }
 
-func BulkInsertLinks(links []Link) {
+func BulkInsertEdges(links [EDGE_BATCH_SIZE]Link) {
 	// Start building the bulk insert statement
 	var values []string
 	var args []interface{}
 
 	for _, link := range links {
 		values = append(values, "(?, ?)")
-		args = append(args, link.Target, link.Source)
+		args = append(args, int(link.Target), int(link.Source))
 	}
 
 	// Combine into a single statement
@@ -131,19 +135,33 @@ func BulkInsertLinks(links []Link) {
 	}
 }
 
-func NormalizeUrlString(urlRaw string) (string, error) {
-	url, err := urlx.Parse(urlRaw)
+func NormalizeUrlString(urlRaw string) (*url.Url, error) {
+	url, err := canonicalizer.GoogleSafeBrowsing.Parse(urlRaw)
 	if err != nil {
-		return "", err
+		return url, err
 	}
-	return NormalizeURL(url)
+
+	s := url.Scheme()
+	if s != "http" && s != "https" {
+		return url, fmt.Errorf("url scheme is not http or https: %s", s)
+	}
+
+	p := url.Port()
+	if p != "" && p != "80" && p != "443" {
+		return url, fmt.Errorf("port is not 80 or 443: %s", p)
+	}
+	url.SetPort("")
+
+	url.SetSearch("")
+	return url, nil
 }
 
-func NormalizeURL(url *url.URL) (string, error) {
-	url.RawQuery = ""
-	url.User = nil
-	flags := purell.FlagsSafe | purell.FlagDecodeDWORDHost | purell.FlagDecodeOctalHost | purell.FlagDecodeHexHost | purell.FlagRemoveUnnecessaryHostDots | purell.FlagRemoveEmptyPortSeparator
-	return purell.NormalizeURL(url, flags), nil
+func GetUrlHash(url *url.Url) uint64 {
+	urlNormalized := url.Href(false)
+	h := sha1.New()
+	h.Write([]byte(urlNormalized))
+	hBytes := h.Sum(nil)
+	return binary.BigEndian.Uint64(hBytes)
 }
 
 func main() {
@@ -168,13 +186,25 @@ func main() {
 
 	// Handlers
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
-		target := e.Attr("href")
-
-		linksAccumulator <- Link{
-			Source: e.Request.URL.String(),
-			Target: target,
+		targetAbsolute := e.Request.AbsoluteURL(e.Attr("href"))
+		if targetAbsolute == "" {
+			return
 		}
-		e.Request.Visit(target)
+
+		target, err := NormalizeUrlString(targetAbsolute)
+		if err != nil {
+			// TODO Add metric for normalization error
+			return
+		}
+
+		source, err := NormalizeUrlString(e.Request.URL.String())
+		if err != nil {
+			// TODO Add metric for normalization error
+			return
+		}
+		linksAccumulator <- Link{GetUrlHash(source), GetUrlHash(target)}
+
+		e.Request.Visit(target.Href(false))
 	})
 
 	c.OnRequest(func(r *colly.Request) {
