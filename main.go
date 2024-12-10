@@ -229,7 +229,7 @@ func main() {
 
 	// Set Colly Storage
 	storage := &PostgresStorage{Db: db}
-	q, err := queue.New(126, storage)
+	q, err := queue.New(16, storage)
 	if err != nil {
 		log.Fatal("Failed to init the queue:", err)
 	}
@@ -254,7 +254,7 @@ func main() {
 		}
 		linksAccumulator <- [2]url.Url{*source, *target}
 
-		e.Request.Visit(target.Href(false))
+		q.AddURL(target.Href(false))
 	})
 
 	c.OnRequest(func(r *colly.Request) {
