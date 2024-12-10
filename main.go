@@ -11,9 +11,11 @@ import (
 	"time"
 
 	"github.com/gocolly/colly"
+	"github.com/joho/godotenv"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/nlnwa/whatwg-url/canonicalizer"
 	"github.com/nlnwa/whatwg-url/url"
+	"github.com/zolamk/colly-postgres-storage/colly/postgres"
 )
 
 const BATCH_SIZE = 1024
@@ -32,6 +34,13 @@ type UrlDb struct {
 	Host     string
 	Pathname string
 	Fragment string
+}
+
+type Settings struct {
+	PostgresUser     string
+	PostgresPassword string
+	PostgresHost     string
+	PostgresOptions  string
 }
 
 func initSqlite() {
@@ -213,6 +222,19 @@ func GetUrlHash(url url.Url) int64 {
 }
 
 func main() {
+	// Load Settings
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+	s := Settings{
+		PostgresUser:     os.Getenv("POSTGRES_USER"),
+		PostgresPassword: os.Getenv("POSTGRES_PASSWORD"),
+		PostgresHost:     os.Getenv("POSTGRES_HOST"),
+		PostgresOptions:  os.Getenv("POSTGRES_OPTIONS"),
+	}
+
+	// Init Backlink engine DB Connection
 	initSqlite()
 	defer db.Close()
 
@@ -225,12 +247,29 @@ func main() {
 	linksAccumulator := make(chan [2]url.Url)
 	go LinkAccumulator(linksAccumulator)
 
-	// Configure Colly
+	// Settingsure Colly
 	c := colly.NewCollector(
 		colly.Async(true),
 	)
 	c.Limit(&colly.LimitRule{DomainGlob: "*", Parallelism: 8})
 	c.SetRequestTimeout(5 * time.Second)
+
+	// Set Colly Storage
+	storage_uri := fmt.Sprintf(
+		"postgres://%s:%s@%s/colly?%s",
+		s.PostgresUser,
+		s.PostgresPassword,
+		s.PostgresHost,
+		s.PostgresOptions,
+	)
+	storage := &postgres.Storage{
+		URI:          storage_uri,
+		VisitedTable: "colly_visited",
+		CookiesTable: "colly_cookies",
+	}
+	if err := c.SetStorage(storage); err != nil {
+		log.Fatal(err)
+	}
 
 	// Handlers
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
