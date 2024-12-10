@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gocolly/colly"
+	"github.com/gocolly/colly/v2"
+	"github.com/gocolly/colly/v2/queue"
 	"github.com/joho/godotenv"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	"github.com/nlnwa/whatwg-url/canonicalizer"
 	"github.com/nlnwa/whatwg-url/url"
-	"github.com/zolamk/colly-postgres-storage/colly/postgres"
 )
 
 const BATCH_SIZE = 1024
@@ -37,40 +37,34 @@ type UrlDb struct {
 }
 
 type Settings struct {
-	PostgresUser     string
-	PostgresPassword string
-	PostgresHost     string
-	PostgresOptions  string
+	PostgresUri string
 }
 
-func initSqlite() {
-	db, err = sql.Open("sqlite3", "./backlinks.db")
+func initDatabase(uri string) {
+
+	fmt.Println(uri)
+	db, err = sql.Open("postgres", uri)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	_, err = db.Exec(`
-		PRAGMA journal_mode = WAL;
-		PRAGMA synchronous = NORMAL;
-		PRAGMA busy_timeout = 5000;
-		PRAGMA cache_size = -20000;
-		PRAGMA foreign_keys = ON;
-		PRAGMA temp_store = MEMORY;
-
 		CREATE TABLE IF NOT EXISTS urls (
-			sha1 INTEGER, 
+			sha1 BIGINT,
 			scheme TEXT,
 			host TEXT,
 			pathname TEXT,
 			fragment TEXT,
 			PRIMARY KEY (sha1)
 		);
-		CREATE TABLE IF NOT EXISTS links (
-			target_id INTEGER, 
-			source_id INTEGER,
-			PRIMARY KEY (target_id, source_id)
-		);
 
+		CREATE TABLE IF NOT EXISTS links (
+			target_id BIGINT,
+			source_id BIGINT,
+			PRIMARY KEY (target_id, source_id),
+			FOREIGN KEY (target_id) REFERENCES urls (sha1),
+			FOREIGN KEY (source_id) REFERENCES urls (sha1)
+		);
 	`)
 	if err != nil {
 		log.Fatal(err)
@@ -137,26 +131,20 @@ func BulkInsertUrls(urls [2 * BATCH_SIZE]url.Url) {
 	var values []string
 	var args []interface{}
 
-	for _, url := range urls {
-		values = append(values, "(?, ?, ?, ?, ?)")
+	for i, url := range urls {
+		// Generate placeholders like ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10), etc.
+		values = append(values, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d)", i*5+1, i*5+2, i*5+3, i*5+4, i*5+5))
 		args = append(args, GetUrlHash(url), url.Scheme(), url.Host(), url.Pathname(), url.Fragment())
 	}
 
 	// Combine into a single statement
 	stmt := fmt.Sprintf(
-		"INSERT  INTO urls (sha1, scheme, host, pathname, fragment) VALUES %s ON CONFLICT DO NOTHING",
+		"INSERT INTO urls (sha1, scheme, host, pathname, fragment) VALUES %s ON CONFLICT DO NOTHING",
 		strings.Join(values, ","),
 	)
 
-	// Prepare the statement
-	preparedStmt, err := db.Prepare(stmt)
-	if err != nil {
-		log.Println(err)
-	}
-	defer preparedStmt.Close()
-
 	// Execute the statement with all arguments
-	_, err = preparedStmt.Exec(args...)
+	_, err := db.Exec(stmt, args...)
 	if err != nil {
 		log.Println(err)
 	}
@@ -167,8 +155,9 @@ func BulkInsertLinks(links [BATCH_SIZE]Link) {
 	var values []string
 	var args []interface{}
 
-	for _, link := range links {
-		values = append(values, "(?, ?)")
+	for i, link := range links {
+		// Generate placeholders like ($1, $2), ($3, $4), etc.
+		values = append(values, fmt.Sprintf("($%d, $%d)", i*2+1, i*2+2))
 		args = append(args, int(link.Target), int(link.Source))
 	}
 
@@ -178,15 +167,8 @@ func BulkInsertLinks(links [BATCH_SIZE]Link) {
 		strings.Join(values, ","),
 	)
 
-	// Prepare the statement
-	preparedStmt, err := db.Prepare(stmt)
-	if err != nil {
-		log.Println(err)
-	}
-	defer preparedStmt.Close()
-
 	// Execute the statement with all arguments
-	_, err = preparedStmt.Exec(args...)
+	_, err := db.Exec(stmt, args...)
 	if err != nil {
 		log.Println(err)
 	}
@@ -225,17 +207,12 @@ func main() {
 	// Load Settings
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal("Error loading .env file:", err)
 	}
-	s := Settings{
-		PostgresUser:     os.Getenv("POSTGRES_USER"),
-		PostgresPassword: os.Getenv("POSTGRES_PASSWORD"),
-		PostgresHost:     os.Getenv("POSTGRES_HOST"),
-		PostgresOptions:  os.Getenv("POSTGRES_OPTIONS"),
-	}
+	s := Settings{PostgresUri: os.Getenv("POSTGRES_URI")}
 
 	// Init Backlink engine DB Connection
-	initSqlite()
+	initDatabase(s.PostgresUri)
 	defer db.Close()
 
 	// Start the MetricLogger in a goroutine
@@ -248,27 +225,13 @@ func main() {
 	go LinkAccumulator(linksAccumulator)
 
 	// Settingsure Colly
-	c := colly.NewCollector(
-		colly.Async(true),
-	)
-	c.Limit(&colly.LimitRule{DomainGlob: "*", Parallelism: 8})
-	c.SetRequestTimeout(5 * time.Second)
+	c := colly.NewCollector()
 
 	// Set Colly Storage
-	storage_uri := fmt.Sprintf(
-		"postgres://%s:%s@%s/colly?%s",
-		s.PostgresUser,
-		s.PostgresPassword,
-		s.PostgresHost,
-		s.PostgresOptions,
-	)
-	storage := &postgres.Storage{
-		URI:          storage_uri,
-		VisitedTable: "colly_visited",
-		CookiesTable: "colly_cookies",
-	}
-	if err := c.SetStorage(storage); err != nil {
-		log.Fatal(err)
+	storage := &PostgresStorage{Db: db}
+	q, err := queue.New(126, storage)
+	if err != nil {
+		log.Fatal("Failed to init the queue:", err)
 	}
 
 	// Handlers
@@ -304,9 +267,10 @@ func main() {
 	})
 
 	// Start scraping on
-	c.Visit("https://www.bbc.com/")
-	c.Visit("https://www.theguardian.com/europe/")
-	c.Visit("https://www.liberation.fr/")
+	q.AddURL("https://www.bbc.com/")
+	q.AddURL("https://www.theguardian.com/europe/")
+	q.AddURL("https://www.liberation.fr/")
 
+	q.Run(c)
 	c.Wait()
 }
