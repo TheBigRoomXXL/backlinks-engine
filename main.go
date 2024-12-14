@@ -81,7 +81,7 @@ func MetricLogger(reqChan <-chan struct{}, errChan <-chan error) {
 		panic(err)
 	}
 	l := log.New(logFile, "", log.Ldate|log.Ltime)
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	start := time.Now()
 	requests := 0
 	errors := 0
