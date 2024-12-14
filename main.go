@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/sha1"
-	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -18,61 +17,9 @@ import (
 
 const BATCH_SIZE = 1024
 
-var db *sql.DB
 var err error
 
-type Link struct {
-	Target int64
-	Source int64
-}
-
-type UrlDb struct {
-	Sha1     int64
-	Scheme   string
-	Host     string
-	Pathname string
-	Fragment string
-}
-
 type Settings struct {
-	PostgresUser     string
-	PostgresPassword string
-	PostgresHost     string
-	PostgresOptions  string
-}
-
-func initSqlite() {
-	db, err = sql.Open("sqlite3", "./backlinks.db")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(`
-		PRAGMA journal_mode = WAL;
-		PRAGMA synchronous = NORMAL;
-		PRAGMA busy_timeout = 5000;
-		PRAGMA cache_size = -20000;
-		PRAGMA foreign_keys = ON;
-		PRAGMA temp_store = MEMORY;
-
-		CREATE TABLE IF NOT EXISTS urls (
-			sha1 INTEGER, 
-			scheme TEXT,
-			host TEXT,
-			pathname TEXT,
-			fragment TEXT,
-			PRIMARY KEY (sha1)
-		);
-		CREATE TABLE IF NOT EXISTS links (
-			target_id INTEGER, 
-			source_id INTEGER,
-			PRIMARY KEY (target_id, source_id)
-		);
-
-	`)
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
 func MetricLogger(reqChan <-chan struct{}, errChan <-chan error) {
@@ -111,85 +58,6 @@ func MetricLogger(reqChan <-chan struct{}, errChan <-chan error) {
 	}
 }
 
-func LinkAccumulator(ch <-chan [2]url.Url) {
-	var linksBatch = [BATCH_SIZE]Link{}
-	var urlsBatch = [BATCH_SIZE * 2]url.Url{}
-	i := 0
-	for v := range ch {
-		source, target := v[0], v[1]
-		urlsBatch[i] = source
-		urlsBatch[BATCH_SIZE+i] = target
-		linksBatch[i] = Link{GetUrlHash(source), GetUrlHash(target)}
-		if i == 1023 {
-			BulkInsertUrls(urlsBatch)
-			BulkInsertLinks(linksBatch)
-			i = 0
-		} else {
-			i++
-		}
-	}
-}
-
-func BulkInsertUrls(urls [2 * BATCH_SIZE]url.Url) {
-	// Start building the bulk insert statement
-	var values []string
-	var args []interface{}
-
-	for _, url := range urls {
-		values = append(values, "(?, ?, ?, ?, ?)")
-		args = append(args, GetUrlHash(url), url.Scheme(), url.Host(), url.Pathname(), url.Fragment())
-	}
-
-	// Combine into a single statement
-	stmt := fmt.Sprintf(
-		"INSERT  INTO urls (sha1, scheme, host, pathname, fragment) VALUES %s ON CONFLICT DO NOTHING",
-		strings.Join(values, ","),
-	)
-
-	// Prepare the statement
-	preparedStmt, err := db.Prepare(stmt)
-	if err != nil {
-		log.Println(err)
-	}
-	defer preparedStmt.Close()
-
-	// Execute the statement with all arguments
-	_, err = preparedStmt.Exec(args...)
-	if err != nil {
-		log.Println(err)
-	}
-}
-
-func BulkInsertLinks(links [BATCH_SIZE]Link) {
-	// Start building the bulk insert statement
-	var values []string
-	var args []interface{}
-
-	for _, link := range links {
-		values = append(values, "(?, ?)")
-		args = append(args, int(link.Target), int(link.Source))
-	}
-
-	// Combine into a single statement
-	stmt := fmt.Sprintf(
-		"INSERT INTO links (target_id, source_id) VALUES %s ON CONFLICT DO NOTHING",
-		strings.Join(values, ","),
-	)
-
-	// Prepare the statement
-	preparedStmt, err := db.Prepare(stmt)
-	if err != nil {
-		log.Println(err)
-	}
-	defer preparedStmt.Close()
-
-	// Execute the statement with all arguments
-	_, err = preparedStmt.Exec(args...)
-	if err != nil {
-		log.Println(err)
-	}
-}
-
 func NormalizeUrlString(urlRaw string) (*url.Url, error) {
 	url, err := canonicalizer.GoogleSafeBrowsing.Parse(urlRaw)
 	if err != nil {
@@ -221,17 +89,11 @@ func GetUrlHash(url url.Url) int64 {
 
 func main() {
 	// Init Backlink engine DB Connection
-	initSqlite()
-	defer db.Close()
 
 	// Start the MetricLogger in a goroutine
 	counterRequest := make(chan struct{})
 	counterError := make(chan error)
 	go MetricLogger(counterRequest, counterError)
-
-	// Start the accumulator in a goroutine
-	linksAccumulator := make(chan [2]url.Url)
-	go LinkAccumulator(linksAccumulator)
 
 	// Settingsure Colly
 	c := colly.NewCollector(
@@ -253,12 +115,13 @@ func main() {
 			return
 		}
 
-		source, err := NormalizeUrlString(e.Request.URL.String())
-		if err != nil {
-			// TODO Add metric for normalization error
-			return
-		}
-		linksAccumulator <- [2]url.Url{*source, *target}
+		// source, err := NormalizeUrlString(e.Request.URL.String())
+		// if err != nil {
+		// 	// TODO Add metric for normalization error
+		// 	return
+		// }
+
+		// Accumulate before insert
 
 		e.Request.Visit(target.Href(false))
 	})
