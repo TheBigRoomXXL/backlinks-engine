@@ -11,6 +11,7 @@ Setup:
 - Parallelisme 8
 - colly use storage from extension zolamk/colly-postgres-storage.
 - I insert all result into a postgreDb using batch. 
+- seeds: https://www.bbc.com/, https://www.theguardian.com/europe/, https://www.liberation.fr/
 
 > 
     ┌───────────────┬───────────────┬───────────────┬───────────────┐
@@ -35,6 +36,7 @@ Setup:
 - Parallelisme 8
 - colly use built-in InMemoryStorage
 - I insert all result into a postgreDb using batch. 
+- seeds: https://www.bbc.com/, https://www.theguardian.com/europe/, https://www.liberation.fr/
 >
     ┌───────────────┬───────────────┬───────────────┬───────────────┐
     │     Time      │   requests    │    errors     │   timeouts    │
@@ -49,3 +51,27 @@ Setup:
 
 205.3 req/s
 
+
+# Commit 546685415d49a3e83d5c26093a40459d5c9d2199
+
+Setup: 
+- Async collector
+- Timeout 5s
+- Parallelisme 8
+- colly use built-in InMemoryStorage
+- No insert at all, we don't keep the data, we only scrap
+- seeds: https://www.bbc.com/, https://www.theguardian.com/europe/, https://www.liberation.fr/
+
+> 
+    ┌───────────────┬───────────────┬───────────────┬───────────────┐
+    │     Time      │   requests    │    errors     │   timeouts    │
+    ├───────────────┼───────────────┼───────────────┼───────────────┤
+    │           10s │          3825 │             3 │             0 │
+    │           20s │         10592 │             7 │             0 │
+    │           30s │         11210 │            10 │             0 │
+    │           40s │         11577 │            10 │             0 │
+    │           50s │         12391 │            10 │             0 │
+    │          1m0s │         13168 │            10 │             0 │
+    └───────────────┴───────────────┴───────────────┴───────────────┘
+
+219 req/s
