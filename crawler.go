@@ -110,7 +110,7 @@ func NormalizeUrlString(urlRaw string) (string, error) {
 	return url.Href(true), nil
 }
 
-func Crawl(s *Settings, db neo4j.DriverWithContext) {
+func Crawl(s *Settings, db neo4j.DriverWithContext, seeds []string) {
 	// Start the MetricLogger in a goroutine
 	counterRequest := make(chan struct{})
 	counterError := make(chan error)
@@ -175,9 +175,11 @@ func Crawl(s *Settings, db neo4j.DriverWithContext) {
 	})
 
 	// Start scraping on
-	c.Visit("https://www.bbc.com/")
-	c.Visit("https://www.theguardian.com/europe/")
-	c.Visit("https://www.liberation.fr/")
+	for _, seed := range seeds {
+		c.Visit(seed)
+	}
 
 	c.Wait()
+
+	fmt.Println("└───────────────┴───────────────┴───────────────┴───────────────┘")
 }

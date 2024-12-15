@@ -45,7 +45,8 @@ func newNeo4j(s *Settings) (neo4j.DriverWithContext, error) {
 	return driver, nil
 }
 
-func Main() {
+func main() {
+
 	s := newSettings()
 
 	db, err := newNeo4j(s)
@@ -54,5 +55,19 @@ func Main() {
 	}
 	defer db.Close(context.Background())
 
-	Crawl(s, db)
+	if len(os.Args) < 2 {
+		log.Fatal("A command (crawl or vwww) is expected as argument")
+	}
+
+	cmd := os.Args[1]
+	if cmd != "crawl" && cmd != "vwww" {
+		log.Fatal("Invalid command: crawl or vwww is expected")
+	}
+	if cmd == "crawl" {
+		Crawl(s, db, os.Args[2:])
+	}
+	if cmd == "vwww" {
+		vwww := NewVirtualWorldWideWeb(1_000)
+		ServeVWWW(vwww)
+	}
 }
