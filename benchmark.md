@@ -75,3 +75,35 @@ Setup:
     └───────────────┴───────────────┴───────────────┴───────────────┘
 
 219 req/s
+
+
+# Commit 20261a3438e4b65376268cb19b3a47ce14ba11b4
+
+
+Setup: 
+- Async collector
+- Timeout 5s
+- Parallelisme 8
+- colly use built-in InMemoryStorage
+- Data Inserted into Neo4J
+- seeds: https://www.bbc.com/, https://www.theguardian.com/europe/, https://www.liberation.fr/
+
+
+> 
+    ┌───────────────┬───────────────┬───────────────┬───────────────┐
+    │     Time      │   requests    │    errors     │   timeouts    │
+    ├───────────────┼───────────────┼───────────────┼───────────────┤
+    │           10s │          5337 │             2 │             0 │
+    │           20s │          7950 │             3 │             0 │
+    │           30s │         16089 │             5 │             0 │
+    │           40s │         20330 │            17 │             1 │
+    │           50s │         25868 │            25 │             1 │
+    │          1m0s │         32825 │            44 │             2 │
+    │         1m10s │         35347 │           237 │           189 │
+    │         1m20s │         38983 │           556 │           505 │
+    │         1m30s │         42696 │           900 │           840 │
+    │         1m40s │         43407 │          1184 │          1123 │
+
+434 req/s
+
+The timeout come from neo4j transactions
