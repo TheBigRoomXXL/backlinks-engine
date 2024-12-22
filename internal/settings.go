@@ -1,18 +1,18 @@
 package internal
 
 import (
-	"context"
-	"fmt"
 	"log"
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
 type Settings struct {
 	DB_USER     string
 	DB_PASSWORD string
+	DB_HOSTNAME string
+	DB_NAME     string
+	DB_PORT     string
 	LOG_PATH    string
 }
 
@@ -30,6 +30,18 @@ func NewSettings() *Settings {
 	if !ok {
 		log.Fatal("$DB_PASSWORD must be set")
 	}
+	dbHostname, ok := os.LookupEnv("DB_HOSTNAME")
+	if !ok {
+		dbHostname = "localhost"
+	}
+	dbName, ok := os.LookupEnv("DB_NAME")
+	if !ok {
+		dbName = "backlinks"
+	}
+	dbPort, ok := os.LookupEnv("DB_PORT")
+	if !ok {
+		dbPort = "9000"
+	}
 	logPath, ok := os.LookupEnv("LOG_PATH")
 	if !ok {
 		logPath = "errors.log"
@@ -38,25 +50,10 @@ func NewSettings() *Settings {
 	return &Settings{
 		DB_USER:     dbUser,
 		DB_PASSWORD: dbPassword,
+		DB_HOSTNAME: dbHostname,
+		DB_NAME:     dbName,
+		DB_PORT:     dbPort,
 		LOG_PATH:    logPath,
 	}
 
-}
-
-func NewDatabase(s *Settings) (neo4j.DriverWithContext, error) {
-	uri := "neo4j://localhost:7687" // TODO: add to settings
-
-	driver, err := neo4j.NewDriverWithContext(uri, neo4j.BasicAuth(s.DB_USER, s.DB_PASSWORD, ""))
-	if err != nil {
-		return nil, err
-	}
-
-	// Test the connection by verifying the authentication
-	ctx := context.Background()
-	if err := driver.VerifyConnectivity(ctx); err != nil {
-		driver.Close(ctx)
-		return nil, fmt.Errorf("failed to verify connection: %w", err)
-	}
-
-	return driver, nil
 }

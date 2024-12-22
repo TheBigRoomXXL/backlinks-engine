@@ -27,3 +27,4 @@ go.work.sum
 **.db*
 **colly-cache/
 **.log
+**.logs

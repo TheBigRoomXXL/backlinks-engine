@@ -4,46 +4,66 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/nlnwa/whatwg-url/canonicalizer"
 )
 
-func PutPage(db neo4j.DriverWithContext, source string, targets []string) error {
+const BULK_SIZE = 512
+
+type Source struct {
+	Url        string
+	targetUrls []string
+}
+
+func LinksAccumulator(sourcesChan <-chan Source, db driver.Conn) {
+	var sources [BULK_SIZE]Source
+	i := 0
+	for {
+		s := <-sourcesChan
+		sources[i] = s
+		i++
+		if i >= BULK_SIZE {
+			i = 0
+			err := LinksBulkInsert(db, sources)
+			if err != nil {
+				// TODO: do some real error handling
+				fmt.Println(err)
+			}
+		}
+	}
+}
+
+func LinksBulkInsert(db driver.Conn, sources [BULK_SIZE]Source) error {
+	// 1. delete any existing link from the source
+	var sourcesUrls [BULK_SIZE]string
+	for i := 0; i < len(sources); i++ {
+		sourcesUrls[i] = sources[i].Url
+	}
 	ctx := context.Background()
-	session := db.NewSession(ctx, neo4j.SessionConfig{})
-	defer session.Close(ctx)
+	query := `DELETE FROM links WHERE source in ?`
+	err := db.Exec(ctx, query, sourcesUrls)
+	if err != nil {
+		return err
+	}
 
-	_, err := neo4j.ExecuteWrite(ctx, session, func(tx neo4j.ManagedTransaction) (any, error) {
-		// Step 1: Create the source node
-		sourceQuery := "MERGE (source:Page {url: $source})"
-		if _, err := tx.Run(ctx, sourceQuery, map[string]any{"source": source}); err != nil {
-			return struct{}{}, err
+	// 2. Insert the new links
+	batch, err := db.PrepareBatch(ctx, "INSERT INTO links")
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(sources); i++ {
+		for j := 0; j < len(sources[i].targetUrls); j++ {
+			err := batch.Append(
+				sources[i].Url,
+				sources[i].targetUrls[j],
+			)
+			if err != nil {
+				return err
+			}
 		}
+	}
 
-		// Step 2: Create target nodes and relationships
-		targetQuery := `
-			UNWIND $targets AS targetUrl
-			MERGE (target:Page {url: targetUrl})
-			MERGE (source:Page {url: $source})-[:LINKS_TO]->(target)
-		`
-		if _, err := tx.Run(ctx, targetQuery, map[string]any{"source": source, "targets": targets}); err != nil {
-			return struct{}{}, err
-		}
-
-		// Step 3: Remove edges to nodes not in the targets list
-		cleanupQuery := `
-			MATCH (source:Page {url: $source})-[r:LINKS_TO]->(target:Page)
-			WHERE NOT target.url IN $targets
-			DELETE r
-		`
-		if _, err := tx.Run(ctx, cleanupQuery, map[string]any{"source": source, "targets": targets}); err != nil {
-			return struct{}{}, err
-		}
-
-		return struct{}{}, nil
-	})
-
-	return err
+	return nil
 }
 
 func NormalizeUrlString(urlRaw string) (string, error) {

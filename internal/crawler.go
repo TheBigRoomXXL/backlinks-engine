@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/gocolly/colly/v2"
-	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
 func MetricLogger(reqChan <-chan struct{}, errChan <-chan error, logFile *os.File) {
@@ -43,7 +43,7 @@ func MetricLogger(reqChan <-chan struct{}, errChan <-chan error, logFile *os.Fil
 	}
 }
 
-func Crawl(s *Settings, db neo4j.DriverWithContext, seeds []string) {
+func Crawl(s *Settings, db driver.Conn, seeds []string) {
 	// Start the MetricLogger in a goroutine
 	counterRequest := make(chan struct{})
 	counterError := make(chan error)
@@ -53,7 +53,11 @@ func Crawl(s *Settings, db neo4j.DriverWithContext, seeds []string) {
 	}
 	go MetricLogger(counterRequest, counterError, logFile)
 
-	// Settingsure Colly
+	// Start the link acculator in goroutine
+	sourcesChan := make(chan Source)
+	go LinksAccumulator(sourcesChan, db)
+
+	// Setip Colly
 	c := colly.NewCollector(
 		colly.Async(true),
 	)
@@ -77,6 +81,7 @@ func Crawl(s *Settings, db neo4j.DriverWithContext, seeds []string) {
 	})
 
 	c.OnScraped(func(r *colly.Response) {
+		counterRequest <- struct{}{}
 		var targets []string
 		r.Ctx.ForEach(func(key string, value interface{}) interface{} {
 			if value == "target" {
@@ -96,14 +101,7 @@ func Crawl(s *Settings, db neo4j.DriverWithContext, seeds []string) {
 			return
 		}
 
-		err = PutPage(db, source, targets)
-		if err != nil {
-			counterError <- err
-		}
-	})
-
-	c.OnRequest(func(r *colly.Request) {
-		counterRequest <- struct{}{}
+		sourcesChan <- Source{source, targets}
 	})
 
 	c.OnError(func(r *colly.Response, err error) {

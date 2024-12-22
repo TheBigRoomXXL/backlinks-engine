@@ -1,0 +1,19 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse
+    ports:
+      - "${DB_PORT}:9000"  # Native interface without tls
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_config:/etc/clickhouse-server
+    environment:
+      CLICKHOUSE_DB: ${DB_NAME:-backlinks}
+      CLICKHOUSE_USER: ${DB_USER}
+      CLICKHOUSE_PASSWORD: ${DB_PASSWORD}
+    restart: unless-stopped
+
+volumes:
+  clickhouse_data:
+  clickhouse_config:
+  db_data:

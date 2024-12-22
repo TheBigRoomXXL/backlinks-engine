@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"os"
 
@@ -15,7 +14,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close(context.Background())
+	defer db.Close()
 
 	if len(os.Args) < 2 {
 		log.Fatal("A command (crawl or vwww) is expected as argument")
