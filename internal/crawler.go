@@ -54,7 +54,7 @@ func Crawl(s *Settings, db driver.Conn, seeds []string) {
 	go MetricLogger(counterRequest, counterError, logFile)
 
 	// Start the link acculator in goroutine
-	sourcesChan := make(chan Source)
+	sourcesChan := make(chan Link)
 	go LinksAccumulator(sourcesChan, db)
 
 	// Setip Colly
@@ -101,7 +101,7 @@ func Crawl(s *Settings, db driver.Conn, seeds []string) {
 			return
 		}
 
-		sourcesChan <- Source{source, targets}
+		sourcesChan <- Link{source, targets}
 	})
 
 	c.OnError(func(r *colly.Response, err error) {

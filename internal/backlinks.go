@@ -10,13 +10,18 @@ import (
 
 const BULK_SIZE = 512
 
-type Source struct {
-	Url        string
-	targetUrls []string
+type Link struct {
+	Source  string
+	Targets []string
 }
 
-func LinksAccumulator(sourcesChan <-chan Source, db driver.Conn) {
-	var sources [BULK_SIZE]Source
+type Backlink struct {
+	Target  string
+	Sources []string
+}
+
+func LinksAccumulator(sourcesChan <-chan Link, db driver.Conn) {
+	var sources [BULK_SIZE]Link
 	i := 0
 	for {
 		s := <-sourcesChan
@@ -33,11 +38,11 @@ func LinksAccumulator(sourcesChan <-chan Source, db driver.Conn) {
 	}
 }
 
-func LinksBulkInsert(db driver.Conn, sources [BULK_SIZE]Source) error {
+func LinksBulkInsert(db driver.Conn, sources [BULK_SIZE]Link) error {
 	// 1. delete any existing link from the source
 	var sourcesUrls [BULK_SIZE]string
 	for i := 0; i < len(sources); i++ {
-		sourcesUrls[i] = sources[i].Url
+		sourcesUrls[i] = sources[i].Source
 	}
 	ctx := context.Background()
 	query := `DELETE FROM links WHERE source in ?`
@@ -52,10 +57,10 @@ func LinksBulkInsert(db driver.Conn, sources [BULK_SIZE]Source) error {
 		return err
 	}
 	for i := 0; i < len(sources); i++ {
-		for j := 0; j < len(sources[i].targetUrls); j++ {
+		for j := 0; j < len(sources[i].Targets); j++ {
 			err := batch.Append(
-				sources[i].Url,
-				sources[i].targetUrls[j],
+				sources[i].Source,
+				sources[i].Targets[j],
 			)
 			if err != nil {
 				return err
