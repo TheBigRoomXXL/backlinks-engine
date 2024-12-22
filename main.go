@@ -5,31 +5,13 @@ import (
 	"log"
 	"os"
 
-	"github.com/joho/godotenv"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal"
 )
 
-type Settings struct {
-	NEO4J_USER     string
-	NEO4J_PASSWORD string
-}
-
-func newSettings() *Settings {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-	return &Settings{
-		NEO4J_USER:     os.Getenv("NEO4J_USER"),
-		NEO4J_PASSWORD: os.Getenv("NEO4J_PASSWORD"),
-	}
-
-}
-
 func main() {
+	s := internal.NewSettings()
 
-	s := newSettings()
-
-	db, err := newDatabase(s)
+	db, err := internal.NewDatabase(s)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,10 +26,10 @@ func main() {
 		log.Fatal("Invalid command: crawl or vwww is expected")
 	}
 	if cmd == "crawl" {
-		Crawl(s, db, os.Args[2:])
+		internal.Crawl(s, db, os.Args[2:])
 	}
 	if cmd == "vwww" {
-		vwww := NewVirtualWorldWideWeb(1_000)
-		ServeVWWW(vwww)
+		vwww := internal.NewVirtualWorldWideWeb(1_000)
+		internal.ServeVWWW(vwww)
 	}
 }
