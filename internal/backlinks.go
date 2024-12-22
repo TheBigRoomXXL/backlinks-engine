@@ -8,24 +8,6 @@ import (
 	"github.com/nlnwa/whatwg-url/canonicalizer"
 )
 
-func newDatabase(s *Settings) (neo4j.DriverWithContext, error) {
-	uri := "neo4j://localhost:7687" // TODO: add to settings
-
-	driver, err := neo4j.NewDriverWithContext(uri, neo4j.BasicAuth(s.NEO4J_USER, s.NEO4J_PASSWORD, ""))
-	if err != nil {
-		return nil, err
-	}
-
-	// Test the connection by verifying the authentication
-	ctx := context.Background()
-	if err := driver.VerifyConnectivity(ctx); err != nil {
-		driver.Close(ctx)
-		return nil, fmt.Errorf("failed to verify connection: %w", err)
-	}
-
-	return driver, nil
-}
-
 func PutPage(db neo4j.DriverWithContext, source string, targets []string) error {
 	ctx := context.Background()
 	session := db.NewSession(ctx, neo4j.SessionConfig{})

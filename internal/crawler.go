@@ -11,11 +11,7 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
-func MetricLogger(reqChan <-chan struct{}, errChan <-chan error) {
-	logFile, err := os.Create("errors.log")
-	if err != nil {
-		panic(err)
-	}
+func MetricLogger(reqChan <-chan struct{}, errChan <-chan error, logFile *os.File) {
 	l := log.New(logFile, "", log.Ldate|log.Ltime)
 	ticker := time.NewTicker(10 * time.Second)
 	start := time.Now()
@@ -51,7 +47,11 @@ func Crawl(s *Settings, db neo4j.DriverWithContext, seeds []string) {
 	// Start the MetricLogger in a goroutine
 	counterRequest := make(chan struct{})
 	counterError := make(chan error)
-	go MetricLogger(counterRequest, counterError)
+	logFile, err := os.Create(s.LOG_PATH)
+	if err != nil {
+		log.Fatal(err)
+	}
+	go MetricLogger(counterRequest, counterError, logFile)
 
 	// Settingsure Colly
 	c := colly.NewCollector(
