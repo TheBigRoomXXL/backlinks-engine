@@ -28,3 +28,5 @@ go.work.sum
 **colly-cache/
 **.log
 **.logs
+
+vwww/
