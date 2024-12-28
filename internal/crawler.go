@@ -49,6 +49,7 @@ func Crawl(s *Settings, db driver.Conn, seeds []string) {
 	geziyor.NewGeziyor(&geziyor.Options{
 		StartURLs:   seeds,
 		ParseFunc:   HTMLHandler,
+		ErrorFunc:   ErrorHandler,
 		LogDisabled: true,
 	}).Start()
 
