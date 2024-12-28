@@ -2,11 +2,40 @@ package internal
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
-	"github.com/gocolly/colly/v2"
+	"github.com/PuerkitoBio/goquery"
+	"github.com/geziyor/geziyor"
+	"github.com/geziyor/geziyor/client"
 )
+
+func HTMLHandler(g *geziyor.Geziyor, r *client.Response) {
+	counterRequest <- struct{}{}
+	r.HTMLDoc.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+		href, exist := s.Attr("href")
+		if !exist {
+			counterError <- fmt.Errorf("no link in <a> element")
+			return
+		}
+
+		targetAbsolute, err := r.Request.URL.Parse(href)
+		if err != nil {
+			counterError <- fmt.Errorf("failed to parse absolute link %s", href)
+			return
+		}
+
+		target, err := NormalizeUrlString(targetAbsolute.String())
+		if err != nil {
+			counterError <- fmt.Errorf("failed to normalize link %s", target)
+			return
+		}
+		g.Get(target, HTMLHandler)
+	})
+}
+
+func ErrorHandler(g *geziyor.Geziyor, r *client.Request, err error) {
+	counterError <- fmt.Errorf("geziyor error: %w", err)
+}
 
 func Crawl(s *Settings, db driver.Conn, seeds []string) {
 	// Start the metrics logger
@@ -17,63 +46,11 @@ func Crawl(s *Settings, db driver.Conn, seeds []string) {
 	go LinksAccumulator(sourcesChan, db)
 
 	// Setup Colly
-	c := colly.NewCollector(
-		colly.Async(true),
-	)
-	c.Limit(&colly.LimitRule{DomainGlob: "*", Parallelism: s.MAX_PARALLELISM})
-	c.SetRequestTimeout(5 * time.Second)
-
-	// Handlers
-	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
-		targetAbsolute := e.Request.AbsoluteURL(e.Attr("href"))
-		if targetAbsolute == "" {
-			return
-		}
-
-		target, err := NormalizeUrlString(targetAbsolute)
-		if err != nil {
-			// TODO Add metric for normalization error
-			return
-		}
-
-		e.Response.Ctx.Put(target, "target")
-	})
-
-	c.OnScraped(func(r *colly.Response) {
-		counterRequest <- struct{}{}
-		var targets []string
-		r.Ctx.ForEach(func(key string, value interface{}) interface{} {
-			if value == "target" {
-				targets = append(targets, key)
-			}
-			return nil
-		})
-
-		// Continue to Crawl
-		for _, target := range targets {
-			r.Request.Visit(target)
-		}
-
-		source, err := NormalizeUrlString(r.Request.URL.String())
-		if err != nil {
-			counterError <- fmt.Errorf("failed to normalized link '%s' from page %s: %w", r.Request.URL.String(), source, err)
-			return
-		}
-
-		sourcesChan <- Link{source, targets}
-	})
-
-	c.OnError(func(r *colly.Response, err error) {
-		msg := fmt.Errorf("%s: %s", r.Request.URL.Hostname(), err)
-		counterError <- msg
-	})
-
-	// Start scraping on
-	for _, seed := range seeds {
-		c.Visit(seed)
-	}
-
-	c.Wait()
+	geziyor.NewGeziyor(&geziyor.Options{
+		StartURLs:   seeds,
+		ParseFunc:   HTMLHandler,
+		LogDisabled: true,
+	}).Start()
 
 	fmt.Println("└───────────────┴───────────────┴───────────────┴───────────────┘")
 }
