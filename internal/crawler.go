@@ -56,7 +56,7 @@ func Crawl(s *Settings, db driver.Conn, seeds []string) {
 
 		source, err := NormalizeUrlString(r.Request.URL.String())
 		if err != nil {
-			// TODO Add metric for normalization error
+			counterError <- fmt.Errorf("failed to normalized link '%s' from page %s: %w", r.Request.URL.String(), source, err)
 			return
 		}
 

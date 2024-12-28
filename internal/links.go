@@ -83,8 +83,8 @@ func NormalizeUrlString(urlRaw string) (string, error) {
 	if p != "" && p != "80" && p != "443" {
 		return "", fmt.Errorf("port is not 80 or 443: %s", p)
 	}
-	url.SetPort("")
 
+	url.SetPort("")
 	url.SetSearch("")
 	url.SetHash("")
 
