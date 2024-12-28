@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -171,6 +172,7 @@ func (vwww *VirtualWorldWideWeb) renderSeed(w http.ResponseWriter, req *http.Req
 }
 
 func (vwww *VirtualWorldWideWeb) renderPage(w http.ResponseWriter, req *http.Request) {
+	start := time.Now()
 	id := req.PathValue("id")
 	if id == "" {
 		w.WriteHeader(404)
@@ -182,14 +184,14 @@ func (vwww *VirtualWorldWideWeb) renderPage(w http.ResponseWriter, req *http.Req
 		if vwww.Pages[i].Id == id {
 			HTMLTemplate.Execute(w, vwww.Pages[i].Targets)
 			vwww.Pages[i].Visited += 1
-			log.Printf("200 - GET /%s\n", id)
+			log.Printf("200 - GET /%s - %s\n", id, time.Since(start))
 			return
 		}
 	}
 
 	w.WriteHeader(404)
 	w.Write([]byte("Not Found"))
-	log.Printf("404 - GET /%s\n", id)
+	log.Printf("404 - GET /%s - %s\n", id, time.Since(start))
 }
 
 func randomSample[T any](data []T) []T {
