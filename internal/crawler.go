@@ -2,56 +2,15 @@ package internal
 
 import (
 	"fmt"
-	"log"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/gocolly/colly/v2"
 )
 
-func MetricLogger(reqChan <-chan struct{}, errChan <-chan error, logFile *os.File) {
-	l := log.New(logFile, "", log.Ldate|log.Ltime)
-	ticker := time.NewTicker(10 * time.Second)
-	start := time.Now()
-	requests := 0
-	errors := 0
-	timeouts := 0
-	fmt.Println("┌───────────────┬───────────────┬───────────────┬───────────────┐")
-	fmt.Println("│     Time      │   requests    │    errors     │   timeouts    │")
-	fmt.Println("├───────────────┼───────────────┼───────────────┼───────────────┤")
-	for {
-		for {
-			select {
-			case <-ticker.C:
-				time := time.Since(start).Round(time.Second)
-				fmt.Printf(
-					"│ %13s │ %13d │ %13d │ %13d │\n",
-					time, requests, errors, timeouts,
-				)
-			case <-reqChan:
-				requests++
-			case e := <-errChan:
-				errors++
-				l.Println(e.Error())
-				if strings.Contains(strings.ToLower(e.Error()), "timeout") {
-					timeouts++
-				}
-			}
-		}
-	}
-}
-
 func Crawl(s *Settings, db driver.Conn, seeds []string) {
-	// Start the MetricLogger in a goroutine
-	counterRequest := make(chan struct{})
-	counterError := make(chan error)
-	logFile, err := os.Create(s.LOG_PATH)
-	if err != nil {
-		log.Fatal(err)
-	}
-	go MetricLogger(counterRequest, counterError, logFile)
+	// Start the metrics logger
+	initLogger(s)
 
 	// Start the link acculator in goroutine
 	sourcesChan := make(chan Link)

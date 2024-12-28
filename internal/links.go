@@ -29,16 +29,12 @@ func LinksAccumulator(sourcesChan <-chan Link, db driver.Conn) {
 		i++
 		if i >= BULK_SIZE {
 			i = 0
-			err := LinksBulkInsert(db, sources)
-			if err != nil {
-				// TODO: do some real error handling
-				fmt.Println(err)
-			}
+			go LinksBulkInsert(db, sources)
 		}
 	}
 }
 
-func LinksBulkInsert(db driver.Conn, sources [BULK_SIZE]Link) error {
+func LinksBulkInsert(db driver.Conn, sources [BULK_SIZE]Link) {
 	// 1. delete any existing link from the source
 	var sourcesUrls [BULK_SIZE]string
 	for i := 0; i < len(sources); i++ {
@@ -48,13 +44,15 @@ func LinksBulkInsert(db driver.Conn, sources [BULK_SIZE]Link) error {
 	query := `DELETE FROM links WHERE source in ?`
 	err := db.Exec(ctx, query, sourcesUrls)
 	if err != nil {
-		return err
+		counterError <- fmt.Errorf("failed to insert links: %w", err)
+		return
 	}
 
 	// 2. Insert the new links
 	batch, err := db.PrepareBatch(ctx, "INSERT INTO links")
 	if err != nil {
-		return err
+		counterError <- fmt.Errorf("failed to insert links: %w", err)
+		return
 	}
 	for i := 0; i < len(sources); i++ {
 		for j := 0; j < len(sources[i].Targets); j++ {
@@ -63,12 +61,11 @@ func LinksBulkInsert(db driver.Conn, sources [BULK_SIZE]Link) error {
 				sources[i].Targets[j],
 			)
 			if err != nil {
-				return err
+				counterError <- fmt.Errorf("failed to insert links: %w", err)
+				return
 			}
 		}
 	}
-
-	return nil
 }
 
 func NormalizeUrlString(urlRaw string) (string, error) {
