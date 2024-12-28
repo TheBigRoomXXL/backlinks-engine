@@ -16,11 +16,12 @@ func Crawl(s *Settings, db driver.Conn, seeds []string) {
 	sourcesChan := make(chan Link)
 	go LinksAccumulator(sourcesChan, db)
 
-	// Setip Colly
+	// Setup Colly
 	c := colly.NewCollector(
 		colly.Async(true),
 	)
-	c.Limit(&colly.LimitRule{DomainGlob: "*", Parallelism: 8})
+	fmt.Println(s.COLLY_MAX_PARALLELISM)
+	c.Limit(&colly.LimitRule{DomainGlob: "*", Parallelism: s.COLLY_MAX_PARALLELISM})
 	c.SetRequestTimeout(5 * time.Second)
 
 	// Handlers
