@@ -3,9 +3,9 @@ package internal
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
-	"github.com/nlnwa/whatwg-url/canonicalizer"
 )
 
 const BULK_SIZE = 512
@@ -69,14 +69,15 @@ func LinksBulkInsert(db driver.Conn, sources [BULK_SIZE]Link) {
 }
 
 func NormalizeUrlString(urlRaw string) (string, error) {
-	url, err := canonicalizer.GoogleSafeBrowsing.Parse(urlRaw)
+	// TODO: bring back the rules from GoogleSafeBrowsing in a performant way
+	// url, err := canonicalizer.GoogleSafeBrowsing.Parse(urlRaw)
+	url, err := url.Parse(urlRaw)
 	if err != nil {
 		return "", err
 	}
 
-	s := url.Scheme()
-	if s != "http" && s != "https" {
-		return "", fmt.Errorf("url scheme is not http or https: %s", s)
+	if url.Scheme != "http" && url.Scheme != "https" {
+		return "", fmt.Errorf("url scheme is not http or https: %s", url.Scheme)
 	}
 
 	p := url.Port()
@@ -84,9 +85,8 @@ func NormalizeUrlString(urlRaw string) (string, error) {
 		return "", fmt.Errorf("port is not 80 or 443: %s", p)
 	}
 
-	url.SetPort("")
-	url.SetSearch("")
-	url.SetHash("")
+	url.Fragment = ""
+	url.RawQuery = ""
 
-	return url.Href(true), nil
+	return url.String(), nil
 }
