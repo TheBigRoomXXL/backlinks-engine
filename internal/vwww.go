@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -124,6 +125,7 @@ func (vwww *VirtualWorldWideWeb) renderIndex(w http.ResponseWriter, req *http.Re
 }
 
 func (vwww *VirtualWorldWideWeb) renderPage(w http.ResponseWriter, req *http.Request) {
+	time.Sleep(20 * time.Microsecond)
 	id := req.PathValue("id")
 	if id == "" {
 		w.WriteHeader(404)
