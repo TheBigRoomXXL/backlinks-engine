@@ -23,7 +23,7 @@ func initLogger(s *Settings) {
 }
 
 func MetricLogger() {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	start := time.Now()
 	requests := 0
 	errors := 0

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 )
@@ -53,27 +54,37 @@ func GenerateVWWW(nbPage int, nbSeed int, directoryPath string) error {
 		ids[i] = uuid.NewString()
 	}
 
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, 64)
 	for i := 0; i < nbPage; i++ {
-		// 2.1 Prepare a file for each page
-		pageFile, err := os.Create(directoryPath + ids[i])
-		if err != nil {
-			return fmt.Errorf("failed to create page file %s: %w", ids[i], err)
-		}
-		defer pageFile.Close()
+		wg.Add(1)
+		semaphore <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-semaphore }()
 
-		// 2.2 Generate targets
-		cyclicId := ids[(i+1)%nbPage] // Ensure all nodes are connected
-		targets := randomSample(ids)
-		fields := append([]string{cyclicId}, targets...)
-		_, err = pageFile.WriteString(strings.Join(fields, "\n"))
-		if err != nil {
-			return fmt.Errorf("failed to wrtie to page file %s: %w", ids[i], err)
-		}
-		err = pageFile.Sync()
-		if err != nil {
-			return fmt.Errorf("failed to sync page file %s: %w", ids[i], err)
-		}
+			// 2.1 Prepare a file for each page
+			pageFile, err := os.Create(directoryPath + ids[i])
+			if err != nil {
+				log.Printf("failed to create page file %s: %s", ids[i], err)
+			}
+			defer pageFile.Close()
+
+			// 2.2 Generate targets
+			cyclicId := ids[(i+1)%nbPage] // Ensure all nodes are connected
+			targets := randomSample(ids)
+			fields := append([]string{cyclicId}, targets...)
+			_, err = pageFile.WriteString(strings.Join(fields, "\n"))
+			if err != nil {
+				log.Printf("failed to wrtie to page file %s: %s", ids[i], err)
+			}
+			err = pageFile.Sync()
+			if err != nil {
+				log.Printf("failed to sync page file %s: %s", ids[i], err)
+			}
+		}()
 	}
+	wg.Wait()
 
 	// 3. Generate seeds
 	seedFile, err := os.Create(directoryPath + "seeds")
@@ -125,9 +136,9 @@ func (vwww *VirtualWorldWideWeb) renderPage(w http.ResponseWriter, req *http.Req
 		w.Write([]byte("Not Found"))
 		return
 	}
-
 	targets := strings.Split(string(content), "\n")
 	HTMLTemplate.Execute(w, targets)
+	// log.Printf("GET %s - %s", id, time.Since(t0))
 }
 
 func randomSample[T any](data []T) []T {
