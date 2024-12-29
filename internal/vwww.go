@@ -184,7 +184,7 @@ func (vwww *VirtualWorldWideWeb) renderPage(w http.ResponseWriter, req *http.Req
 		if vwww.Pages[i].Id == id {
 			HTMLTemplate.Execute(w, vwww.Pages[i].Targets)
 			vwww.Pages[i].Visited += 1
-			log.Printf("200 - GET /%s - %s\n", id, time.Since(start))
+			// log.Printf("200 - GET /%s - %s\n", id, time.Since(start))
 			return
 		}
 	}

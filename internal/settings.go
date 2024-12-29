@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"runtime"
@@ -10,13 +11,13 @@ import (
 )
 
 type Settings struct {
-	DB_USER               string
-	DB_PASSWORD           string
-	DB_HOSTNAME           string
-	DB_NAME               string
-	DB_PORT               string
-	LOG_PATH              string
-	COLLY_MAX_PARALLELISM int
+	DB_USER         string
+	DB_PASSWORD     string
+	DB_HOSTNAME     string
+	DB_NAME         string
+	DB_PORT         string
+	LOG_PATH        string
+	MAX_PARALLELISM int
 }
 
 func NewSettings() *Settings {
@@ -24,6 +25,7 @@ func NewSettings() *Settings {
 	if err != nil && err.Error() != "open .env: no such file or directory" {
 		log.Fatal("Error loading .env file")
 	}
+	fmt.Println(err, "loeaded")
 
 	dbUser, ok := os.LookupEnv("DB_USER")
 	if !ok {
@@ -50,25 +52,25 @@ func NewSettings() *Settings {
 		logPath = "errors.log"
 	}
 
-	var collyMaxParallelismInt int
-	collyMaxParallelism, ok := os.LookupEnv("COLLY_MAX_PARALLELISM")
+	var maxParallelismInt int
+	collyMaxParallelism, ok := os.LookupEnv("MAX_PARALLELISM")
 	if !ok {
-		collyMaxParallelismInt = runtime.NumCPU()
+		maxParallelismInt = runtime.NumCPU()
 	} else {
-		collyMaxParallelismInt, err = strconv.Atoi(collyMaxParallelism)
+		maxParallelismInt, err = strconv.Atoi(collyMaxParallelism)
 		if err != nil {
-			log.Fatal("Failed to parse COLLY_MAX_PARALLELISM: %w", err)
+			log.Fatal("Failed to parse MAX_PARALLELISM: %w", err)
 		}
 	}
 
 	return &Settings{
-		DB_USER:               dbUser,
-		DB_PASSWORD:           dbPassword,
-		DB_HOSTNAME:           dbHostname,
-		DB_NAME:               dbName,
-		DB_PORT:               dbPort,
-		LOG_PATH:              logPath,
-		COLLY_MAX_PARALLELISM: collyMaxParallelismInt,
+		DB_USER:         dbUser,
+		DB_PASSWORD:     dbPassword,
+		DB_HOSTNAME:     dbHostname,
+		DB_NAME:         dbName,
+		DB_PORT:         dbPort,
+		LOG_PATH:        logPath,
+		MAX_PARALLELISM: maxParallelismInt,
 	}
 
 }

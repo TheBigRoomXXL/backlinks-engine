@@ -9,8 +9,10 @@ import (
 )
 
 func Crawl(s *Settings, db driver.Conn, seeds []string) {
+	fmt.Println("crawl starrt")
 	// Start the metrics logger
 	initLogger(s)
+	fmt.Println("log stated")
 
 	// Start the link acculator in goroutine
 	sourcesChan := make(chan Link)
@@ -20,8 +22,7 @@ func Crawl(s *Settings, db driver.Conn, seeds []string) {
 	c := colly.NewCollector(
 		colly.Async(true),
 	)
-	fmt.Println(s.COLLY_MAX_PARALLELISM)
-	c.Limit(&colly.LimitRule{DomainGlob: "*", Parallelism: s.COLLY_MAX_PARALLELISM})
+	c.Limit(&colly.LimitRule{DomainGlob: "*", Parallelism: s.MAX_PARALLELISM})
 	c.SetRequestTimeout(5 * time.Second)
 
 	// Handlers
