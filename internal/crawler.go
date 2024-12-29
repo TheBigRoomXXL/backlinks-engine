@@ -47,10 +47,11 @@ func Crawl(s *Settings, db driver.Conn, seeds []string) {
 
 	// Setup Colly
 	geziyor.NewGeziyor(&geziyor.Options{
-		StartURLs:   seeds,
-		ParseFunc:   HTMLHandler,
-		ErrorFunc:   ErrorHandler,
-		LogDisabled: true,
+		StartURLs:          seeds,
+		ParseFunc:          HTMLHandler,
+		ErrorFunc:          ErrorHandler,
+		LogDisabled:        true,
+		ConcurrentRequests: 2048,
 	}).Start()
 
 	fmt.Println("└───────────────┴───────────────┴───────────────┴───────────────┘")
