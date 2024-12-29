@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"runtime"
@@ -25,7 +24,6 @@ func NewSettings() *Settings {
 	if err != nil && err.Error() != "open .env: no such file or directory" {
 		log.Fatal("Error loading .env file")
 	}
-	fmt.Println(err, "loeaded")
 
 	dbUser, ok := os.LookupEnv("DB_USER")
 	if !ok {

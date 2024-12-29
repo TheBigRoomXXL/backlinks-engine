@@ -1,7 +1,7 @@
 package internal
 
 import (
-	"encoding/csv"
+	"fmt"
 	"html/template"
 	"log"
 	"math"
@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -30,125 +29,77 @@ var HTMLTemplate = template.Must(template.New("VirtualPage").Parse(`
 `))
 
 type VirtualPage struct {
-	Id      string
 	Targets []string
-	Visited int
 }
 
 type VirtualWorldWideWeb struct {
-	Pages []VirtualPage
-	Seeds []string
+	directoryPath string
 }
 
-func NewVWWW(nbPage int, nbSeed int) *VirtualWorldWideWeb {
+func GenerateVWWW(nbPage int, nbSeed int, directoryPath string) error {
+	// 1. Prepare file structure
+	err := os.MkdirAll(directoryPath, 0o755)
+	if err != nil {
+		return fmt.Errorf("failed to create vwww directory: %w", err)
+	}
+
+	if !strings.HasPrefix(directoryPath, "/") {
+		directoryPath = directoryPath + "/"
+	}
+
+	// 2. Generate page
 	ids := make([]string, nbPage)
 	for i := 0; i < nbPage; i++ {
 		ids[i] = uuid.NewString()
 	}
 
-	pages := make([]VirtualPage, nbPage)
 	for i := 0; i < nbPage; i++ {
-		// DO NOT FORGET:
-		//  - targets can be any page, including the current page.
-		//  - there can be dupplicates in targets
+		// 2.1 Prepare a file for each page
+		pageFile, err := os.Create(directoryPath + ids[i])
+		if err != nil {
+			return fmt.Errorf("failed to create page file %s: %w", ids[i], err)
+		}
+		defer pageFile.Close()
 
+		// 2.2 Generate targets
+		cyclicId := ids[(i+1)%nbPage] // Ensure all nodes are connected
 		targets := randomSample(ids)
-		targets = append(targets, ids[(i+1)%nbPage]) // Ensure the graph is cyclic
-		pages[i] = VirtualPage{ids[i], targets, 0}
+		fields := append([]string{cyclicId}, targets...)
+		_, err = pageFile.WriteString(strings.Join(fields, "\n"))
+		if err != nil {
+			return fmt.Errorf("failed to wrtie to page file %s: %w", ids[i], err)
+		}
+		err = pageFile.Sync()
+		if err != nil {
+			return fmt.Errorf("failed to sync page file %s: %w", ids[i], err)
+		}
 	}
 
-	seeds := make([]string, nbSeed)
+	// 3. Generate seeds
+	seedFile, err := os.Create(directoryPath + "seeds")
+	if err != nil {
+		return fmt.Errorf("failed to create seeds file: %w", err)
+	}
+	defer seedFile.Close()
 	for i := 0; i < nbSeed; i++ {
-		seeds[i] = pages[rand.Intn(nbPage)].Id
-	}
-
-	return &VirtualWorldWideWeb{pages, seeds}
-}
-
-func NewVWWWFromCSV(directoryPath string) (*VirtualWorldWideWeb, error) {
-	if !strings.HasPrefix(directoryPath, "/") {
-		directoryPath = directoryPath + "/"
-	}
-
-	f1, err := os.Open(directoryPath + "pages")
-	if err != nil {
-		return nil, err
-	}
-	defer f1.Close()
-	csv1 := csv.NewReader(f1)
-	csv1.FieldsPerRecord = -1
-	lines, err := csv1.ReadAll()
-	if err != nil {
-		return nil, err
-	}
-	pages := make([]VirtualPage, len(lines))
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-		pages[i] = VirtualPage{line[0], append([]string{}, line[2:]...), 0}
-	}
-
-	f2, err := os.Open(directoryPath + "seeds")
-	if err != nil {
-		return nil, err
-	}
-	defer f2.Close()
-	csv2 := csv.NewReader(f2)
-	csv2.FieldsPerRecord = 1
-	lines, err = csv2.ReadAll()
-	if err != nil {
-		return nil, err
-	}
-	seeds := make([]string, len(lines))
-	for i := 0; i < len(lines); i++ {
-		seeds[i] = lines[i][0]
-	}
-
-	return &VirtualWorldWideWeb{pages, seeds}, nil
-}
-
-func (vwww *VirtualWorldWideWeb) DumpCSV(directoryPath string) error {
-	err := os.MkdirAll(directoryPath, 0o755)
-	if err != nil {
-		return err
-	}
-
-	if !strings.HasPrefix(directoryPath, "/") {
-		directoryPath = directoryPath + "/"
-	}
-
-	f1, err := os.Create(directoryPath + "pages")
-	if err != nil {
-		return err
-	}
-	defer f1.Close()
-	csv1 := csv.NewWriter(f1)
-	for _, page := range vwww.Pages {
-		fields := append([]string{page.Id}, page.Targets...)
-		err = csv1.Write(fields)
+		seed := ids[rand.Intn(nbPage)]
+		_, err = seedFile.WriteString(seed + "\n")
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to write to seed file: %w", err)
 		}
 	}
-	csv1.Flush()
-
-	f2, err := os.Create(directoryPath + "seeds")
+	err = seedFile.Sync()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to sync seed file: %w", err)
 	}
-	defer f2.Close()
-	csv2 := csv.NewWriter(f2)
-	for _, seed := range vwww.Seeds {
-		err = csv2.Write([]string{seed})
-		if err != nil {
-			return err
-		}
-	}
-	csv2.Flush()
 	return nil
 }
 
+func NewVWWW(directoryPath string) *VirtualWorldWideWeb {
+	return &VirtualWorldWideWeb{directoryPath: directoryPath}
+}
+
 func (vwww *VirtualWorldWideWeb) Serve() error {
-	http.HandleFunc("/seeds", vwww.renderSeed)
 	http.HandleFunc("/{id}", vwww.renderPage)
 	http.HandleFunc("/", vwww.renderIndex)
 
@@ -158,43 +109,31 @@ func (vwww *VirtualWorldWideWeb) Serve() error {
 }
 
 func (vwww *VirtualWorldWideWeb) renderIndex(w http.ResponseWriter, req *http.Request) {
-	ids := make([]string, len(vwww.Pages))
-	for i := 0; i < len(vwww.Pages); i++ {
-		ids[i] = vwww.Pages[i].Id
-	}
-	HTMLTemplate.Execute(w, ids)
-	log.Printf("200 - GET /\n")
-}
-
-func (vwww *VirtualWorldWideWeb) renderSeed(w http.ResponseWriter, req *http.Request) {
-	HTMLTemplate.Execute(w, vwww.Seeds)
-	log.Printf("200 - GET /seeds\n")
+	w.Write([]byte("Welcolme to the VirtualWorlWideWeb."))
 }
 
 func (vwww *VirtualWorldWideWeb) renderPage(w http.ResponseWriter, req *http.Request) {
-	start := time.Now()
 	id := req.PathValue("id")
 	if id == "" {
 		w.WriteHeader(404)
 		w.Write([]byte("Not Found"))
-		log.Printf("404 - GET /%s\n", id)
+		return
+	}
+	content, err := os.ReadFile(vwww.directoryPath + id)
+	if err != nil {
+		w.WriteHeader(404)
+		w.Write([]byte("Not Found"))
+		return
 	}
 
-	for i := 0; i < len(vwww.Pages); i++ {
-		if vwww.Pages[i].Id == id {
-			HTMLTemplate.Execute(w, vwww.Pages[i].Targets)
-			vwww.Pages[i].Visited += 1
-			// log.Printf("200 - GET /%s - %s\n", id, time.Since(start))
-			return
-		}
-	}
-
-	w.WriteHeader(404)
-	w.Write([]byte("Not Found"))
-	log.Printf("404 - GET /%s - %s\n", id, time.Since(start))
+	targets := strings.Split(string(content), "\n")
+	HTMLTemplate.Execute(w, targets)
 }
 
 func randomSample[T any](data []T) []T {
+	// DO NOT FORGET:
+	//  - targets can be any page, including the current page.
+	//  - there can be dupplicates in targets
 	var alpha float64
 	var max float64
 	if len(data) <= 100_000 {

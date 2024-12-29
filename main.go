@@ -53,29 +53,22 @@ func main() {
 				log.Fatal("failed to parse nbSeed:", err)
 			}
 			t0 := time.Now()
-			vwww := internal.NewVWWW(nbPage, nbSeed)
-			t1 := time.Now()
-			err = vwww.DumpCSV(fmt.Sprintf("vwww/%d", nbPage))
-			t2 := time.Now()
-			fmt.Println("Time to generate:", t1.Sub(t0))
-			fmt.Println("Time to dump:", t2.Sub(t1))
+			internal.GenerateVWWW(nbPage, nbSeed, fmt.Sprintf("vwww/%d", nbPage))
 			if err != nil {
 				log.Fatal("failed to dump VWWW to CVS:", err)
 			}
+			fmt.Println("Time to generate:", time.Since(t0))
 			return
 		}
 		if subcmd == "serve" {
 			if len(os.Args) < 4 {
 				log.Fatal("serve expect a path to a dumped vwww")
 			}
-			vwww, err := internal.NewVWWWFromCSV(os.Args[3])
+			err := internal.NewVWWW(os.Args[3]).Serve()
 			if err != nil {
-				log.Fatal("failed to load VWWW:", err)
+				log.Fatal("VWWW crashed:", err)
 			}
-			err = vwww.Serve()
-			if err != nil {
-				log.Fatal("failed to load VWWW:", err)
-			}
+
 		}
 	}
 }
