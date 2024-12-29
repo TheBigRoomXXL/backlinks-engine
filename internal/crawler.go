@@ -9,10 +9,8 @@ import (
 )
 
 func Crawl(s *Settings, db driver.Conn, seeds []string) {
-	fmt.Println("crawl starrt")
 	// Start the metrics logger
 	initLogger(s)
-	fmt.Println("log stated")
 
 	// Start the link acculator in goroutine
 	sourcesChan := make(chan Link)
