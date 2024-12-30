@@ -3,20 +3,17 @@ package internal
 import (
 	"log"
 	"os"
-	"runtime"
-	"strconv"
 
 	"github.com/joho/godotenv"
 )
 
 type Settings struct {
-	DB_USER         string
-	DB_PASSWORD     string
-	DB_HOSTNAME     string
-	DB_NAME         string
-	DB_PORT         string
-	LOG_PATH        string
-	MAX_PARALLELISM int
+	DB_USER     string
+	DB_PASSWORD string
+	DB_HOSTNAME string
+	DB_NAME     string
+	DB_PORT     string
+	LOG_PATH    string
 }
 
 func NewSettings() *Settings {
@@ -50,25 +47,13 @@ func NewSettings() *Settings {
 		logPath = "errors.log"
 	}
 
-	var maxParallelismInt int
-	collyMaxParallelism, ok := os.LookupEnv("MAX_PARALLELISM")
-	if !ok {
-		maxParallelismInt = runtime.NumCPU()
-	} else {
-		maxParallelismInt, err = strconv.Atoi(collyMaxParallelism)
-		if err != nil {
-			log.Fatal("Failed to parse MAX_PARALLELISM: %w", err)
-		}
-	}
-
 	return &Settings{
-		DB_USER:         dbUser,
-		DB_PASSWORD:     dbPassword,
-		DB_HOSTNAME:     dbHostname,
-		DB_NAME:         dbName,
-		DB_PORT:         dbPort,
-		LOG_PATH:        logPath,
-		MAX_PARALLELISM: maxParallelismInt,
+		DB_USER:     dbUser,
+		DB_PASSWORD: dbPassword,
+		DB_HOSTNAME: dbHostname,
+		DB_NAME:     dbName,
+		DB_PORT:     dbPort,
+		LOG_PATH:    logPath,
 	}
 
 }
