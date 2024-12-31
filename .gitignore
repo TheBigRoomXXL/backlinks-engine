@@ -31,6 +31,3 @@ go.work.sum
 
 vwww/
 !internal/vwww
-seeds
-seeds.csv
-seeds.txt
