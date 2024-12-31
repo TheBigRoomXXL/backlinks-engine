@@ -1,19 +1,38 @@
 services:
-  clickhouse:
-    image: clickhouse/clickhouse-server:latest
-    container_name: clickhouse
-    ports:
-      - "${DB_PORT}:9000"  # Native interface without tls
-    volumes:
-      - clickhouse_data:/var/lib/clickhouse
-      - clickhouse_config:/etc/clickhouse-server
+  # clickhouse:
+  #   image: clickhouse/clickhouse-server:latest
+  #   container_name: clickhouse
+  #   ports:
+  #     - "${DB_PORT}:9000"  # Native interface without tls
+  #   volumes:
+  #     - clickhouse_data:/var/lib/clickhouse
+  #     - clickhouse_config:/etc/clickhouse-server
+  #   environment:
+  #     CLICKHOUSE_DB: ${DB_NAME:-backlinks}
+  #     CLICKHOUSE_USER: ${DB_USER}
+  #     CLICKHOUSE_PASSWORD: ${DB_PASSWORD}
+  #   restart: unless-stopped
+
+  postgres:
+    image: postgres:latest
     environment:
-      CLICKHOUSE_DB: ${DB_NAME:-backlinks}
-      CLICKHOUSE_USER: ${DB_USER}
-      CLICKHOUSE_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: $DB_USER
+      POSTGRES_PASSWORD: $DB_PASSWORD
+      POSTGRES_DB : $DB_NAME
+      PGDATA: /data/postgres
+    volumes:
+       - postgres_data:/data/postgres
+    ports:
+      - "4010:5432"
     restart: unless-stopped
 
+  admin:
+    image: adminer
+    restart: always
+    ports:
+      - 4011:8080
+
 volumes:
-  clickhouse_data:
-  clickhouse_config:
-  db_data:
+  # clickhouse_data:
+  # clickhouse_config:
+  postgres_data:
