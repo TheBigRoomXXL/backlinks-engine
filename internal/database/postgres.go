@@ -26,12 +26,13 @@ func NewPostgres(ctx context.Context, s *settings.Settings) (*postgres, error) {
 	pgOnce.Do(func() {
 		var pool *pgxpool.Pool
 		uri := fmt.Sprintf(
-			"postgresql://%s:%s@%s:%s/%s",
+			"postgresql://%s:%s@%s:%s/%s?%s",
 			s.DB_USER,
 			s.DB_PASSWORD,
 			s.DB_HOSTNAME,
 			s.DB_PORT,
 			s.DB_NAME,
+			s.DB_OPTIONS,
 		)
 		pool, err = pgxpool.New(ctx, uri)
 		if err != nil {
@@ -39,6 +40,12 @@ func NewPostgres(ctx context.Context, s *settings.Settings) (*postgres, error) {
 			return
 		}
 		pg = &postgres{pool}
+
+		err = pg.Ping(context.Background())
+		if err != nil {
+			err = fmt.Errorf("ping failed after pool creation: %w", err)
+			return
+		}
 
 		_, err = pg.Pool.Exec(context.Background(), `
 			CREATE TABLE IF NOT EXISTS domains (
@@ -68,11 +75,6 @@ func NewPostgres(ctx context.Context, s *settings.Settings) (*postgres, error) {
 
 	if err != nil {
 		return nil, err
-	}
-
-	err = pg.Ping(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("ping failed after pool creation: %w", err)
 	}
 
 	return pg, nil
