@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log"
@@ -10,22 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/database"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/crawl"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/vwww"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/utils"
 )
 
 func main() {
-	t := "truc.com"
-	 utils.ReverseHostname(t)
-	s := settings.NewSettings()
-	pg, err := database.NewPostgres(context.Background(), s)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer pg.Close()
-
 	if len(os.Args) < 2 {
 		log.Fatal("A command (crawl or vwww) is expected as argument")
 	}
@@ -35,8 +23,10 @@ func main() {
 		log.Fatal("Invalid command: crawl or vwww is expected")
 	}
 	if cmd == "crawl" {
-		// internal.Crawl(s, db, os.Args[2:])
-		log.Fatal("Not Implemented")
+		err := crawl.Crawl(os.Args[2:])
+		if err != nil {
+			log.Fatal("crawl failed: ", err)
+		}
 	}
 	if cmd == "vwww" {
 		if len(os.Args) < 3 {
