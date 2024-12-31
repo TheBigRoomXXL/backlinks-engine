@@ -2,6 +2,10 @@ package internal
 
 import (
 	"fmt"
+	"log"
+
+	"net/http"
+	_ "net/http/pprof"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/PuerkitoBio/goquery"
@@ -38,6 +42,12 @@ func ErrorHandler(g *geziyor.Geziyor, r *client.Request, err error) {
 }
 
 func Crawl(s *Settings, db driver.Conn, seeds []string) {
+	// Start the pprof server
+	log.Println("Starting the pprof server of port ", s.PPROF_PORT)
+	go func() {
+		log.Println(http.ListenAndServe("localhost:"+s.PPROF_PORT, nil))
+	}()
+
 	// Start the metrics logger
 	initLogger(s)
 

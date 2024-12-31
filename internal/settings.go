@@ -14,6 +14,7 @@ type Settings struct {
 	DB_NAME     string
 	DB_PORT     string
 	LOG_PATH    string
+	PPROF_PORT  string
 }
 
 func NewSettings() *Settings {
@@ -47,6 +48,11 @@ func NewSettings() *Settings {
 		logPath = "errors.log"
 	}
 
+	pprofPort, ok := os.LookupEnv("PPROF_PORT")
+	if !ok {
+		pprofPort = "8081"
+	}
+
 	return &Settings{
 		DB_USER:     dbUser,
 		DB_PASSWORD: dbPassword,
@@ -54,6 +60,7 @@ func NewSettings() *Settings {
 		DB_NAME:     dbName,
 		DB_PORT:     dbPort,
 		LOG_PATH:    logPath,
+		PPROF_PORT:  pprofPort,
 	}
 
 }
