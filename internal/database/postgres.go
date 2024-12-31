@@ -12,52 +12,65 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type postgres struct {
+type Postgres struct {
 	Pool *pgxpool.Pool
 }
 
 var (
-	pg     *postgres
-	pgOnce sync.Once
+	pg        *Postgres
+	initError error
+	initOnce  sync.Once
 )
 
-func NewPostgres(ctx context.Context, s *settings.Settings) (*postgres, error) {
-	var err error
-	pgOnce.Do(func() {
-		var pool *pgxpool.Pool
-		uri := fmt.Sprintf(
-			"postgresql://%s:%s@%s:%s/%s?%s",
-			s.DB_USER,
-			s.DB_PASSWORD,
-			s.DB_HOSTNAME,
-			s.DB_PORT,
-			s.DB_NAME,
-			s.DB_OPTIONS,
-		)
-		pool, err = pgxpool.New(ctx, uri)
-		if err != nil {
-			err = fmt.Errorf("failed to create connection pool: %w", err)
-			return
-		}
-		pg = &postgres{pool}
+func New() (*Postgres, error) {
+	initOnce.Do(initDatabase)
+	return pg, initError
+}
 
-		err = pg.Ping(context.Background())
-		if err != nil {
-			err = fmt.Errorf("ping failed after pool creation: %w", err)
-			return
-		}
+func initDatabase() {
+	s, err := settings.New()
+	if err != nil {
+		initError = err
+		return
+	}
 
-		_, err = pg.Pool.Exec(context.Background(), `
+	uri := fmt.Sprintf(
+		"postgresql://%s:%s@%s:%s/%s?%s",
+		s.DB_USER,
+		s.DB_PASSWORD,
+		s.DB_HOSTNAME,
+		s.DB_PORT,
+		s.DB_NAME,
+		s.DB_OPTIONS,
+	)
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, uri)
+	if err != nil {
+		initError = fmt.Errorf("failed to create connection pool: %w", err)
+		return
+	}
+
+	pg = &Postgres{pool}
+
+	err = pg.Ping(ctx)
+	if err != nil {
+		initError = fmt.Errorf("ping failed after pool creation: %w", err)
+		return
+	}
+
+	_, err = pg.Pool.Exec(ctx, `
 			CREATE TABLE IF NOT EXISTS domains (
 				hostname_reversed	text PRIMARY KEY,
 				robot 				text NOT NULL
 			);
 
-			CREATE TABLE IF NOT EXISTS urls (
+			CREATE TABLE IF NOT EXISTS pages (
 				id bigserial		PRIMARY KEY,
 				scheme				text NOT NULL,
 				hostname_reversed	text NOT NULL,
-				path 				text NOT NULL
+				path 				text NOT NULL,
+				latest_visited 		timestamp,
+				latest_status 		smallint
 			);
 
 			CREATE TABLE IF NOT EXISTS links (
@@ -67,23 +80,16 @@ func NewPostgres(ctx context.Context, s *settings.Settings) (*postgres, error) {
 				PRIMARY KEY (source, target)
 			);
 		`)
-		if err != nil {
-			err = fmt.Errorf("failed to initialize postgres tables: %w", err)
-			return
-		}
-	})
-
 	if err != nil {
-		return nil, err
+		initError = fmt.Errorf("failed to initialize postgres tables: %w", err)
+		return
 	}
-
-	return pg, nil
 }
 
-func (pg *postgres) Ping(ctx context.Context) error {
+func (pg *Postgres) Ping(ctx context.Context) error {
 	return pg.Pool.Ping(ctx)
 }
 
-func (pg *postgres) Close() {
+func (pg *Postgres) Close() {
 	pg.Pool.Close()
 }

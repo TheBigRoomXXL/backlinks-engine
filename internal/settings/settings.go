@@ -1,8 +1,10 @@
 package settings
 
 import (
-	"log"
+	"errors"
+	"fmt"
 	"os"
+	"sync"
 
 	"github.com/joho/godotenv"
 )
@@ -18,19 +20,30 @@ type Settings struct {
 	PPROF_PORT  string
 }
 
-func NewSettings() *Settings {
+var (
+	settings  *Settings
+	initError error
+	initOnce  sync.Once
+)
+
+func New() (*Settings, error) {
+	initOnce.Do(initSettings)
+	return settings, initError
+}
+
+func initSettings() {
 	err := godotenv.Load(".env")
 	if err != nil && err.Error() != "open .env: no such file or directory" {
-		log.Fatal("Error loading .env file")
+		initError = fmt.Errorf("failed to load .env file: %w", err)
 	}
 
 	dbUser, ok := os.LookupEnv("DB_USER")
 	if !ok {
-		log.Fatal("$DB_USER must be set.")
+		initError = errors.New("environnment $DB_USER must be set")
 	}
 	dbPassword, ok := os.LookupEnv("DB_PASSWORD")
 	if !ok {
-		log.Fatal("$DB_PASSWORD must be set")
+		initError = errors.New("environnment $DB_PASSWORD must be set")
 	}
 	dbHostname, ok := os.LookupEnv("DB_HOSTNAME")
 	if !ok {
@@ -62,7 +75,7 @@ func NewSettings() *Settings {
 		pprofPort = "8081"
 	}
 
-	return &Settings{
+	settings = &Settings{
 		DB_USER:     dbUser,
 		DB_PASSWORD: dbPassword,
 		DB_HOSTNAME: dbHostname,
@@ -72,5 +85,4 @@ func NewSettings() *Settings {
 		LOG_PATH:    logPath,
 		PPROF_PORT:  pprofPort,
 	}
-
 }
