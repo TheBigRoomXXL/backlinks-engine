@@ -1,4 +1,4 @@
-package internal
+package vwww
 
 import (
 	"fmt"
@@ -140,7 +140,6 @@ func (vwww *VirtualWorldWideWeb) renderPage(w http.ResponseWriter, req *http.Req
 	}
 	targets := strings.Split(string(content), "\n")
 	HTMLTemplate.Execute(w, targets)
-	// log.Printf("GET %s - %s", id, time.Since(t0))
 }
 
 func randomSample[T any](data []T) []T {

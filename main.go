@@ -7,18 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/TheBigRoomXXL/backlinks-engine/internal"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/vwww"
 )
 
 func main() {
-	s := internal.NewSettings()
-
-	db, err := internal.NewDatabase(s)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
-
 	if len(os.Args) < 2 {
 		log.Fatal("A command (crawl or vwww) is expected as argument")
 	}
@@ -28,7 +20,8 @@ func main() {
 		log.Fatal("Invalid command: crawl or vwww is expected")
 	}
 	if cmd == "crawl" {
-		internal.Crawl(s, db, os.Args[2:])
+		// internal.Crawl(s, db, os.Args[2:])
+		log.Fatal("Not Implemented")
 	}
 	if cmd == "vwww" {
 		if len(os.Args) < 3 {
@@ -53,7 +46,7 @@ func main() {
 				log.Fatal("failed to parse nbSeed:", err)
 			}
 			t0 := time.Now()
-			internal.GenerateVWWW(nbPage, nbSeed, fmt.Sprintf("vwww/%d", nbPage))
+			vwww.GenerateVWWW(nbPage, nbSeed, fmt.Sprintf("vwww/%d", nbPage))
 			if err != nil {
 				log.Fatal("failed to dump VWWW to CVS:", err)
 			}
@@ -64,7 +57,7 @@ func main() {
 			if len(os.Args) < 4 {
 				log.Fatal("serve expect a path to a dumped vwww")
 			}
-			err := internal.NewVWWW(os.Args[3]).Serve()
+			err := vwww.NewVWWW(os.Args[3]).Serve()
 			if err != nil {
 				log.Fatal("VWWW crashed:", err)
 			}

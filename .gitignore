@@ -30,3 +30,4 @@ go.work.sum
 **.logs
 
 vwww/
+!internal/vwww
