@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -10,10 +10,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/database"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/vwww"
 )
 
 func main() {
+	s := settings.NewSettings()
+	pg, err := database.NewPostgres(context.Background(), s)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer pg.Close()
+
 	if len(os.Args) < 2 {
 		log.Fatal("A command (crawl or vwww) is expected as argument")
 	}
