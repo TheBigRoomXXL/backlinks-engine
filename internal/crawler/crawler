@@ -1,4 +1,10 @@
-// package crawl
+// package crawler
+
+// type Crawler struct {
+// 	pg        *database.Postgres
+// 	client    *client.Fetcher
+// 	errorChan *chan struct{}
+// }
 
 // func Crawl(seeds []string) error {
 // 	fmt.Println("seeds are:", seeds)
