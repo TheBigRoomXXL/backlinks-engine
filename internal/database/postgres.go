@@ -12,19 +12,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Postgres struct {
-	Pool *pgxpool.Pool
-}
-
 var (
-	pg        *Postgres
+	pool      *pgxpool.Pool
 	initError error
 	initOnce  sync.Once
 )
 
-func New() (*Postgres, error) {
+func NewPostgres() (*pgxpool.Pool, error) {
 	initOnce.Do(initDatabase)
-	return pg, initError
+	return pool, initError
 }
 
 func initDatabase() {
@@ -44,21 +40,19 @@ func initDatabase() {
 		s.DB_OPTIONS,
 	)
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, uri)
+	pool, err = pgxpool.New(ctx, uri)
 	if err != nil {
 		initError = fmt.Errorf("failed to create connection pool: %w", err)
 		return
 	}
 
-	pg = &Postgres{pool}
-
-	err = pg.Ping(ctx)
+	err = pool.Ping(ctx)
 	if err != nil {
 		initError = fmt.Errorf("ping failed after pool creation: %w", err)
 		return
 	}
 
-	_, err = pg.Pool.Exec(ctx, `
+	_, err = pool.Exec(ctx, `
 			CREATE TABLE IF NOT EXISTS domains (
 				hostname_reversed	text PRIMARY KEY,
 				robot 				text NOT NULL
@@ -84,12 +78,4 @@ func initDatabase() {
 		initError = fmt.Errorf("failed to initialize postgres tables: %w", err)
 		return
 	}
-}
-
-func (pg *Postgres) Ping(ctx context.Context) error {
-	return pg.Pool.Ping(ctx)
-}
-
-func (pg *Postgres) Close() {
-	pg.Pool.Close()
 }
