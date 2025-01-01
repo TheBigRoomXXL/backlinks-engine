@@ -5,6 +5,8 @@ import (
 	"fmt"
 	_ "net/http/pprof"
 	"time"
+
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/shutdown"
 )
 
 var (
@@ -24,17 +26,18 @@ func MetricsReport() {
 	fmt.Println("┌───────────────┬───────────────┬───────────────┐")
 	fmt.Println("│     Time      │   processed   │    errors     │")
 	fmt.Println("├───────────────┼───────────────┼───────────────┤")
+
+	done := make(chan struct{})
+	shutdown.Subscribe(done)
+
 	ticker := time.NewTicker(time.Second)
-	done := make(chan bool)
-	defer func() {
-		ticker.Stop()
-		done <- true
-	}()
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-done:
-			fmt.Println("└───────────────┴───────────────┴───────────────┘")
+			defer func() { done <- struct{}{} }()
+			fmt.Println("\r└───────────────┴───────────────┴───────────────┘")
 			return
 		case <-ticker.C:
 			time := time.Since(start).Round(time.Second)

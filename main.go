@@ -12,6 +12,9 @@ import (
 )
 
 func main() {
+	// done := make(chan struct{})
+	// shutdown.Subscribe(done)
+
 	if len(os.Args) < 2 {
 		log.Fatal("A command (crawl or vwww) is expected as argument")
 	}
@@ -26,10 +29,8 @@ func main() {
 		// 	log.Fatal("crawl failed: ", err)
 		// }
 		fmt.Println("test telemetry")
-		t0 := time.Now()
 		for {
 			time.Sleep(time.Second)
-			fmt.Println(time.Since(t0))
 			telemetry.ProcessedURL.Add(1)
 		}
 
