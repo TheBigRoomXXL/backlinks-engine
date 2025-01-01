@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/shutdown"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -24,12 +25,26 @@ func NewPostgres() (*pgxpool.Pool, error) {
 }
 
 func initDatabase() {
+	// Ensure connection will be closed gracefully
+	done := make(chan struct{})
+	shutdown.Subscribe(done)
+
+	go func() {
+		<-done
+		if pool != nil {
+			pool.Close()
+		}
+		done <- struct{}{}
+	}()
+
+	// Get settings
 	s, err := settings.New()
 	if err != nil {
 		initError = err
 		return
 	}
 
+	// Create connection pool
 	uri := fmt.Sprintf(
 		"postgresql://%s:%s@%s:%s/%s?%s",
 		s.DB_USER,
@@ -46,12 +61,14 @@ func initDatabase() {
 		return
 	}
 
+	// Test connection pool
 	err = pool.Ping(ctx)
 	if err != nil {
 		initError = fmt.Errorf("ping failed after pool creation: %w", err)
 		return
 	}
 
+	// Ensure Schema is initialized
 	_, err = pool.Exec(ctx, `
 			CREATE TABLE IF NOT EXISTS domains (
 				hostname_reversed	text PRIMARY KEY,
