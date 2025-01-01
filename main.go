@@ -30,7 +30,6 @@ func main() {
 		// if err != nil {
 		// 	log.Fatal("crawl failed: ", err)
 		// }
-		fmt.Println("test telemetry")
 		for {
 			time.Sleep(time.Second)
 			telemetry.ProcessedURL.Add(1)
