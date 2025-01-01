@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/vwww"
 )
 
@@ -26,6 +27,14 @@ func main() {
 		// if err != nil {
 		// 	log.Fatal("crawl failed: ", err)
 		// }
+		fmt.Println("test telemetry")
+		t0 := time.Now()
+		for {
+			time.Sleep(time.Second)
+			fmt.Println(time.Since(t0))
+			telemetry.ProcessedURL.Add(1)
+		}
+
 	}
 	if cmd == "vwww" {
 		if len(os.Args) < 3 {

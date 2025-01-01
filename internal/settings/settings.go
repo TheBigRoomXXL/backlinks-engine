@@ -10,14 +10,14 @@ import (
 )
 
 type Settings struct {
-	DB_USER     string
-	DB_PASSWORD string
-	DB_HOSTNAME string
-	DB_PORT     string
-	DB_NAME     string
-	DB_OPTIONS  string
-	LOG_PATH    string
-	PPROF_PORT  string
+	DB_USER          string
+	DB_PASSWORD      string
+	DB_HOSTNAME      string
+	DB_PORT          string
+	DB_NAME          string
+	DB_OPTIONS       string
+	LOG_PATH         string
+	TELEMETRY_LISTEN string
 }
 
 var (
@@ -70,19 +70,19 @@ func initSettings() {
 		logPath = "errors.log"
 	}
 
-	pprofPort, ok := os.LookupEnv("PPROF_PORT")
+	telemetryListen, ok := os.LookupEnv("TELEMETRY_LISTEN")
 	if !ok {
-		pprofPort = "8081"
+		telemetryListen = "127.0.0.1:4009"
 	}
 
 	settings = &Settings{
-		DB_USER:     dbUser,
-		DB_PASSWORD: dbPassword,
-		DB_HOSTNAME: dbHostname,
-		DB_PORT:     dbPort,
-		DB_NAME:     dbName,
-		DB_OPTIONS:  dbOptions,
-		LOG_PATH:    logPath,
-		PPROF_PORT:  pprofPort,
+		DB_USER:          dbUser,
+		DB_PASSWORD:      dbPassword,
+		DB_HOSTNAME:      dbHostname,
+		DB_PORT:          dbPort,
+		DB_NAME:          dbName,
+		DB_OPTIONS:       dbOptions,
+		LOG_PATH:         logPath,
+		TELEMETRY_LISTEN: telemetryListen,
 	}
 }
