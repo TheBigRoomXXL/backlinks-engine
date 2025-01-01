@@ -34,3 +34,20 @@ In order to achieve my MVP goals for exhaustiveness and freshness, I have set th
 
 This goal would be very easy to achieve with a cluster of servers, but the cost for this project comes from my pocket, so keeping costs as low as possible is a big goal. To efficiently reach my performance goal, I will focus on scaling vertically rather than horizontally, as horizontal scaling is very expensive and will only be used as a last resort. Different infrastructure options are currently considered (and the budget that comes with them!), but no choice will be made until the prototype has advanced further.
 
+On the database side that translate to very approximatly: 
+
+ links table
+  - In the order of 10^11 row
+  - request individual target in under ~200ms
+  - support ~100k row insert per second
+  - can delete obsolete records (can use eventual consistency)
+
+pages table
+  - in the order of 10^9 row
+  - used as a queue 
+  - store, at least, structured url and visite timespamp
+ 
+domain table
+  - in the order of 10^7 rows
+  - store robot.txt
+

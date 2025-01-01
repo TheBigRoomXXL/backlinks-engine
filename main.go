@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/crawl"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/vwww"
 )
 
@@ -21,10 +20,10 @@ func main() {
 		log.Fatal("Invalid command: crawl or vwww is expected")
 	}
 	if cmd == "crawl" {
-		err := crawl.Crawl(os.Args[2:])
-		if err != nil {
-			log.Fatal("crawl failed: ", err)
-		}
+		// err := crawl.Crawl(os.Args[2:])
+		// if err != nil {
+		// 	log.Fatal("crawl failed: ", err)
+		// }
 	}
 	if cmd == "vwww" {
 		if len(os.Args) < 3 {
