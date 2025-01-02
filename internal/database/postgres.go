@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/shutdown"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -17,24 +16,22 @@ var (
 	pool      *pgxpool.Pool
 	initError error
 	initOnce  sync.Once
+	ctx       context.Context
 )
 
-func NewPostgres() (*pgxpool.Pool, error) {
+func NewPostgres(newctx context.Context) (*pgxpool.Pool, error) {
+	ctx = newctx
 	initOnce.Do(initDatabase)
 	return pool, initError
 }
 
 func initDatabase() {
 	// Ensure connection will be closed gracefully
-	done := make(chan struct{})
-	shutdown.Subscribe(done)
-
 	go func() {
-		<-done
+		<-ctx.Done()
 		if pool != nil {
 			pool.Close()
 		}
-		done <- struct{}{}
 	}()
 
 	// Get settings

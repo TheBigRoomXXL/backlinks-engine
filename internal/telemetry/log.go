@@ -35,6 +35,7 @@ func ErrorLogger() {
 	for {
 		select {
 		case <-done:
+			close(ErrorChan)
 			return
 		case err := <-ErrorChan:
 			Errors.Add(1)

@@ -57,6 +57,7 @@ func GenerateVWWW(nbPage int, nbSeed int, directoryPath string) error {
 
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, 64)
+	defer close(semaphore)
 	for i := 0; i < nbPage; i++ {
 		wg.Add(1)
 		semaphore <- struct{}{}
