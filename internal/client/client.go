@@ -97,7 +97,8 @@ func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
 
 // Add the context to every request to have timeout and cancelation support
 func (c *CrawlClient) do(req *http.Request) (*http.Response, error) {
-	ctx, _ := context.WithTimeout(c.ctx, c.timeout)
+	ctx, cancel := context.WithTimeout(c.ctx, c.timeout)
+	defer cancel()
 	req = req.WithContext(ctx)
 	return c.client.Do(req)
 }
