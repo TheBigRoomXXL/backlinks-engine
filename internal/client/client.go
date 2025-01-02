@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
@@ -26,7 +27,7 @@ type CrawlClient struct {
 	ratelimiters map[string]*rate.Limiter
 	rateLimit    rate.Limit
 	retryLimit   int
-	timeout      time.Duration
+	lock         *sync.RWMutex
 }
 
 func NewCrawlClient(
@@ -38,21 +39,17 @@ func NewCrawlClient(
 ) *CrawlClient {
 	c := &CrawlClient{
 		ctx:          ctx,
-		client:       &http.Client{Transport: transport},
+		client:       &http.Client{Transport: transport, Timeout: timeout},
 		rateLimit:    rateLimiter,
 		ratelimiters: make(map[string]*rate.Limiter, 1024),
 		retryLimit:   retryLimit,
-		timeout:      timeout,
+		lock:         &sync.RWMutex{},
 	}
 	return c
 }
 
 func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
-	rateLimiter, ok := c.ratelimiters[req.URL.Host]
-	if !ok {
-		c.ratelimiters[req.URL.Host] = rate.NewLimiter(c.rateLimit, 1)
-		rateLimiter = c.ratelimiters[req.URL.Host]
-	}
+	rateLimiter := c.getRateLimiter(req.Host)
 	err := rateLimiter.Wait(c.ctx) // This is a blocking call. Honors the rate limit
 	if err != nil {
 		return nil, fmt.Errorf("error while waiting for rate limit: %w", err)
@@ -109,6 +106,19 @@ func (c *CrawlClient) Head(url string) (resp *http.Response, err error) {
 		return nil, err
 	}
 	return c.Do(req)
+}
+
+func (c *CrawlClient) getRateLimiter(hostname string) *rate.Limiter {
+	c.lock.RLock()
+	rateLimiter, ok := c.ratelimiters[hostname]
+	c.lock.RUnlock()
+	if !ok {
+		c.lock.Lock()
+		rateLimiter = rate.NewLimiter(c.rateLimit, 1)
+		c.ratelimiters[hostname] = rateLimiter
+		c.lock.Unlock()
+	}
+	return rateLimiter
 }
 
 // Return the duration for next retry based on an exponential of the rate limit
