@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"golang.org/x/time/rate"
 )
 
 type Settings struct {
@@ -18,7 +19,9 @@ type Settings struct {
 	DB_PORT          string
 	DB_NAME          string
 	DB_OPTIONS       string
-	HTTP_TIMEOUT     time.Duration
+	HTTP_TIMEOUT     time.Duration // in seconds
+	HTTP_RATE_LIMIT  rate.Limit    // per domaine rate limit in req/s
+	HTTP_MAX_RETRY   int
 	LOG_PATH         string
 	TELEMETRY_LISTEN string
 }
@@ -81,6 +84,31 @@ func initSettings() {
 		httpTimeout = time.Duration(i * int(time.Second))
 	}
 
+	var httpRateLimit rate.Limit
+	httpRateLimitStr, ok := os.LookupEnv("HTTP_RATE_LIMIT")
+	if !ok {
+		httpRateLimit = rate.Limit(rate.Every(5 * time.Second))
+	} else {
+		i, err := strconv.Atoi(httpRateLimitStr)
+		if err != nil {
+			initError = fmt.Errorf("failed to parse HTTP_TIMEOUT as an int : %w", err)
+			return
+		}
+		httpRateLimit = rate.Limit(rate.Every(time.Duration(i * int(time.Second))))
+	}
+
+	var httpMaxRetry int
+	httpMaxRetryStr, ok := os.LookupEnv("HTTP_TIMEOUT")
+	if !ok {
+		httpMaxRetry = 3
+	} else {
+		httpMaxRetry, err = strconv.Atoi(httpMaxRetryStr)
+		if err != nil {
+			initError = fmt.Errorf("failed to parse HTTP_TIMEOUT as an int : %w", err)
+			return
+		}
+	}
+
 	logPath, ok := os.LookupEnv("LOG_PATH")
 	if !ok {
 		logPath = "errors.log"
@@ -90,6 +118,7 @@ func initSettings() {
 	if !ok {
 		telemetryListen = "127.0.0.1:4009"
 	}
+	fmt.Println("every ", httpRateLimit)
 
 	settings = &Settings{
 		DB_USER:          dbUser,
@@ -99,6 +128,8 @@ func initSettings() {
 		DB_NAME:          dbName,
 		DB_OPTIONS:       dbOptions,
 		HTTP_TIMEOUT:     httpTimeout,
+		HTTP_RATE_LIMIT:  httpRateLimit,
+		HTTP_MAX_RETRY:   httpMaxRetry,
 		LOG_PATH:         logPath,
 		TELEMETRY_LISTEN: telemetryListen,
 	}
