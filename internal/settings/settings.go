@@ -118,7 +118,6 @@ func initSettings() {
 	if !ok {
 		telemetryListen = "127.0.0.1:4009"
 	}
-	fmt.Println("every ", httpRateLimit)
 
 	settings = &Settings{
 		DB_USER:          dbUser,
