@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
 	"golang.org/x/time/rate"
 )
 
@@ -20,35 +21,44 @@ type Fetcher interface {
 
 // Wrap the default http client with per domain rate limit and automated retry
 type CrawlClient struct {
+	ctx          context.Context
 	client       *http.Client
 	ratelimiters map[string]*rate.Limiter
 	rateLimit    rate.Limit
 	retryLimit   int
+	timeout      time.Duration
 }
 
-func NewCrawlClient(transport http.RoundTripper, rateLimiter rate.Limit, retryLimit int) *CrawlClient {
+func NewCrawlClient(
+	ctx context.Context,
+	transport http.RoundTripper,
+	rateLimiter rate.Limit,
+	retryLimit int,
+	timeout time.Duration,
+) *CrawlClient {
 	c := &CrawlClient{
+		ctx:          ctx,
 		client:       &http.Client{Transport: transport},
 		rateLimit:    rateLimiter,
 		ratelimiters: make(map[string]*rate.Limiter, 1024),
 		retryLimit:   retryLimit,
+		timeout:      timeout,
 	}
 	return c
 }
 
 func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
-	ctx := context.Background()
 	rateLimiter, ok := c.ratelimiters[req.URL.Host]
 	if !ok {
 		c.ratelimiters[req.URL.Host] = rate.NewLimiter(c.rateLimit, 1)
 		rateLimiter = c.ratelimiters[req.URL.Host]
 	}
-	err := rateLimiter.Wait(ctx) // This is a blocking call. Honors the rate limit
+	err := rateLimiter.Wait(c.ctx) // This is a blocking call. Honors the rate limit
 	if err != nil {
 		return nil, fmt.Errorf("error while waiting for rate limit: %w", err)
 	}
 
-	resp, err := c.client.Do(req)
+	resp, err := c.do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -62,14 +72,17 @@ func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
 	if slices.Contains(retryStatus, resp.StatusCode) {
 		for retry := 0; retry < c.retryLimit; retry++ {
 			backoff := exponentialBackoff(rateLimiter.Limit(), retry)
-			time.Sleep(time.Duration(backoff * float64(time.Second)))
+			err = commons.Delay(c.ctx, time.Duration(backoff*float64(time.Second)))
+			if err != nil {
+				return nil, fmt.Errorf("error while waiting for delay between retries: %w", err)
+			}
 
-			err := rateLimiter.Wait(ctx)
+			err = rateLimiter.Wait(c.ctx)
 			if err != nil {
 				return nil, fmt.Errorf("error while waiting for rate limit: %w", err)
 			}
 
-			resp, err = c.client.Do(req)
+			resp, err = c.do(req)
 			if err != nil {
 				return nil, fmt.Errorf("error after %d retry: %w", retry, err)
 			}
@@ -80,6 +93,13 @@ func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
 		}
 	}
 	return resp, nil
+}
+
+// Add the context to every request to have timeout and cancelation support
+func (c *CrawlClient) do(req *http.Request) (*http.Response, error) {
+	ctx, _ := context.WithTimeout(c.ctx, c.timeout)
+	req = req.WithContext(ctx)
+	return c.client.Do(req)
 }
 
 func (c *CrawlClient) Get(url string) (resp *http.Response, err error) {
