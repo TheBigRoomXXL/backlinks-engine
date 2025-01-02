@@ -58,7 +58,7 @@ func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("error while waiting for rate limit: %w", err)
 	}
 
-	resp, err := c.do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
 				return nil, fmt.Errorf("error while waiting for rate limit: %w", err)
 			}
 
-			resp, err = c.do(req)
+			resp, err = c.client.Do(req)
 			if err != nil {
 				return nil, fmt.Errorf("error after %d retry: %w", retry, err)
 			}
@@ -93,14 +93,6 @@ func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
 		}
 	}
 	return resp, nil
-}
-
-// Add the context to every request to have timeout and cancelation support
-func (c *CrawlClient) do(req *http.Request) (*http.Response, error) {
-	ctx, cancel := context.WithTimeout(c.ctx, c.timeout)
-	defer cancel()
-	req = req.WithContext(ctx)
-	return c.client.Do(req)
 }
 
 func (c *CrawlClient) Get(url string) (resp *http.Response, err error) {
