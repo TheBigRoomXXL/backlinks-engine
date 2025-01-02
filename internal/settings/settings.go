@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -16,6 +18,7 @@ type Settings struct {
 	DB_PORT          string
 	DB_NAME          string
 	DB_OPTIONS       string
+	HTTP_TIMEOUT     time.Duration
 	LOG_PATH         string
 	TELEMETRY_LISTEN string
 }
@@ -65,6 +68,19 @@ func initSettings() {
 		dbName = ""
 	}
 
+	var httpTimeout time.Duration
+	httpTimeoutStr, ok := os.LookupEnv("HTTP_TIMEOUT")
+	if !ok {
+		httpTimeout = 5 * time.Second
+	} else {
+		i, err := strconv.Atoi(httpTimeoutStr)
+		if err != nil {
+			initError = fmt.Errorf("failed to parse HTTP_TIMEOUT as an int : %w", err)
+			return
+		}
+		httpTimeout = time.Duration(i * int(time.Second))
+	}
+
 	logPath, ok := os.LookupEnv("LOG_PATH")
 	if !ok {
 		logPath = "errors.log"
@@ -82,6 +98,7 @@ func initSettings() {
 		DB_PORT:          dbPort,
 		DB_NAME:          dbName,
 		DB_OPTIONS:       dbOptions,
+		HTTP_TIMEOUT:     httpTimeout,
 		LOG_PATH:         logPath,
 		TELEMETRY_LISTEN: telemetryListen,
 	}
