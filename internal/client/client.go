@@ -20,7 +20,10 @@ type Fetcher interface {
 	Get(url string) (resp *http.Response, err error)
 }
 
-// Wrap the default http client with per domain rate limit and automated retry
+// Wrap the default http client with crawling specific feature:
+//   - per domain rate limiting
+//   - automated retry
+//   - custom user agent
 type CrawlClient struct {
 	ctx          context.Context
 	client       *http.Client
@@ -94,6 +97,7 @@ func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
 
 func (c *CrawlClient) Get(url string) (resp *http.Response, err error) {
 	req, err := http.NewRequest("GET", url, nil)
+	req.Header.Set("User-Agent", "BacklinksBot")
 	if err != nil {
 		return nil, err
 	}
@@ -102,6 +106,7 @@ func (c *CrawlClient) Get(url string) (resp *http.Response, err error) {
 
 func (c *CrawlClient) Head(url string) (resp *http.Response, err error) {
 	req, err := http.NewRequest("HEAD", url, nil)
+	req.Header.Set("User-Agent", "BacklinksBot")
 	if err != nil {
 		return nil, err
 	}
