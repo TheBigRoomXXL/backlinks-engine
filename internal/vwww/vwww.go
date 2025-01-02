@@ -1,6 +1,7 @@
 package vwww
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"log"
@@ -112,13 +113,18 @@ func NewVWWW(directoryPath string) *VirtualWorldWideWeb {
 	return &VirtualWorldWideWeb{directoryPath: directoryPath}
 }
 
-func (vwww *VirtualWorldWideWeb) Serve() error {
+func (vwww *VirtualWorldWideWeb) Serve(ctx context.Context) error {
 	http.HandleFunc("/{id}", vwww.renderPage)
 	http.HandleFunc("/", vwww.renderIndex)
 
 	// Port 80 is necessary to be compatible with the crawler
 	log.Println("Serving requests on http://127.0.0.1")
-	return http.ListenAndServe(":80", nil)
+	go func() {
+		err := http.ListenAndServe(":80", nil)
+		log.Fatal(err)
+	}()
+	<-ctx.Done()
+	return nil
 }
 
 func (vwww *VirtualWorldWideWeb) renderIndex(w http.ResponseWriter, req *http.Request) {
@@ -128,6 +134,7 @@ func (vwww *VirtualWorldWideWeb) renderIndex(w http.ResponseWriter, req *http.Re
 func (vwww *VirtualWorldWideWeb) renderPage(w http.ResponseWriter, req *http.Request) {
 	time.Sleep(20 * time.Microsecond)
 	id := req.PathValue("id")
+
 	if id == "" {
 		w.WriteHeader(404)
 		w.Write([]byte("Not Found"))
@@ -141,6 +148,7 @@ func (vwww *VirtualWorldWideWeb) renderPage(w http.ResponseWriter, req *http.Req
 	}
 	targets := strings.Split(string(content), "\n")
 	HTMLTemplate.Execute(w, targets)
+	w.Header().Add("Content-Type", "test/html")
 }
 
 func randomSample[T any](data []T) []T {
