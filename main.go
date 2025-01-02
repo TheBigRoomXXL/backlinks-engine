@@ -6,18 +6,32 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/client"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/crawler"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/queue"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/vwww"
 )
 
 func main() {
 	ctx, shutdown := context.WithCancelCause(context.Background())
+	defer func() {
+		shutdown(nil)
+		// We need to let some time pass so that goroutine that are waiting for this
+		// cancelation have the time to react. Better techniques exists but are not worth
+		// the hassle in this case
+		time.Sleep(time.Millisecond * 10)
+	}()
+
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -29,10 +43,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 }
 
 func cli(ctx context.Context) error {
+
 	if len(os.Args) < 2 {
 		return errors.New("a command (crawl or vwww) is expected as argument")
 	}
@@ -40,22 +54,30 @@ func cli(ctx context.Context) error {
 	cmd := os.Args[1]
 
 	if cmd == "crawl" {
-		// err := crawl.Crawl(os.Args[2:])
-		// if err != nil {
-		// 	return errors.New("crawl failed: ", err)
-		// }
 		go telemetry.MetricsReport(ctx)
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
 
-		for {
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-ticker.C:
-				telemetry.ProcessedURL.Add(1)
-			}
+		s, err := settings.New()
+		if err != nil {
+			return fmt.Errorf("faield to get setttings: %w", err)
 		}
+		fetcher := client.NewCrawlClient(
+			ctx, http.DefaultTransport, s.HTTP_RATE_LIMIT, s.HTTP_MAX_RETRY, s.HTTP_TIMEOUT,
+		)
+		queue := queue.NewFIFOQueue()
+		crawler, err := crawler.NewCrawler(ctx, queue, fetcher)
+
+		if err != nil {
+			return fmt.Errorf("failed to initialize crawler: %w", err)
+		}
+		for _, seed := range os.Args[2:] {
+			url, err := url.Parse(seed)
+			if err != nil {
+				return fmt.Errorf("failed to parsed seed: %w", err)
+			}
+			crawler.AddUrl(url)
+		}
+
+		return crawler.Run()
 	}
 
 	if cmd == "vwww" {
@@ -89,10 +111,8 @@ func cli(ctx context.Context) error {
 			if len(os.Args) < 4 {
 				return errors.New("serve expect a path to a dumped vwww")
 			}
-			err := vwww.NewVWWW(os.Args[3]).Serve()
-			if err != nil {
-				return fmt.Errorf("VWWW crashed: %w", err)
-			}
+			return vwww.NewVWWW(os.Args[3]).Serve(ctx)
+
 		}
 
 		return errors.New("invalid subcommand: generate or serve is expected")
