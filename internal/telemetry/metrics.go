@@ -1,12 +1,11 @@
 package telemetry
 
 import (
+	"context"
 	"expvar"
 	"fmt"
 	_ "net/http/pprof"
 	"time"
-
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/shutdown"
 )
 
 var (
@@ -17,26 +16,20 @@ var (
 func init() {
 	ProcessedURL = expvar.NewInt("PocessedURL")
 	Errors = expvar.NewInt("Errors")
-
-	go MetricsReport()
 }
 
-func MetricsReport() {
+func MetricsReport(ctx context.Context) {
 	start := time.Now()
 	fmt.Println("┌───────────────┬───────────────┬───────────────┐")
 	fmt.Println("│     Time      │   processed   │    errors     │")
 	fmt.Println("├───────────────┼───────────────┼───────────────┤")
-
-	done := make(chan struct{})
-	shutdown.Subscribe(done)
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-done:
-			defer func() { done <- struct{}{} }()
+		case <-ctx.Done():
 			fmt.Println("\r└───────────────┴───────────────┴───────────────┘")
 			return
 		case <-ticker.C:

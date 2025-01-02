@@ -1,17 +1,37 @@
-// package crawler
+package crawler
 
-// type Crawler struct {
-// 	pg        *database.Postgres
-// 	client    *client.Fetcher
-// 	errorChan *chan struct{}
+import (
+	"context"
+
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/client"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/sync/errgroup"
+)
+
+type Crawler struct {
+	ctx    context.Context
+	group  *errgroup.Group
+	pg     *pgxpool.Pool
+	client *client.Fetcher
+}
+
+// func NewCrawler(ctx context.Context) (*Crawler, error) {
+// 	ctx := shutdown.Subscribe()
+// 	group := errgroup.WithContext(ctx)
+// 	pg, err := database.NewPostgres()
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to get postgres connection pool: %w", err)
+// 	}
+// 	s, err := settings.New()
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to get settings connection pool: %w", err)
+// 	}
+// 	return &Crawler{s, pg}, nil
 // }
 
-// func Crawl(seeds []string) error {
-// 	fmt.Println("seeds are:", seeds)
-// 	planner, err := planer.NewPlanner()
-// 	if err != nil {
-// 		return fmt.Errorf("failed to create planner: %w", err)
-// 	}
+// func Crawl() error {
+
+// }
 
 // 	err = planner.Seed(seeds)
 // 	if err != nil {
