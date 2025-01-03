@@ -61,12 +61,6 @@ func (c *Crawler) Run() error {
 	for i := 0; i < limit; i++ {
 		c.group.Go(c.crawlNextPage)
 	}
-	time.Sleep(1 * time.Second)
-
-	// done := make(chan error)
-	// go func() {
-	// 	done <- c.group.Wait()
-	// }()
 
 	ticker := time.NewTicker(time.Millisecond * 500)
 	defer ticker.Stop()
@@ -91,7 +85,6 @@ func (c *Crawler) crawlNextPage() error {
 		return fmt.Errorf("error getting next element in queue: %w", err)
 	}
 	if url == nil {
-		// fmt.Println("url is nil")
 		return nil
 	}
 	defer telemetry.ProcessedURL.Add(1)
