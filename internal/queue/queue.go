@@ -1,51 +1,12 @@
 package queue
 
 import (
-	"container/list"
 	"net/url"
-	"sync"
 )
 
 type Queue interface {
 	Add(*url.URL) error
 	Next() (*url.URL, error)
-}
-
-// FIFOQueue represents a thread-safe FIFO queue implemented using a linked list.
-type FIFOQueue struct {
-	mu   *sync.Mutex
-	list *list.List
-}
-
-// NewFIFOQueue creates a new FIFOQueue.
-func NewFIFOQueue() *FIFOQueue {
-	return &FIFOQueue{
-		mu:   &sync.Mutex{},
-		list: list.New(),
-	}
-}
-
-// Add adds an element to the end of the list.
-func (q *FIFOQueue) Add(url *url.URL) error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.list.PushBack(url)
-	return nil
-}
-
-// Next removes and returns the element from the front of the list.
-// If the queue is empty, it returns nil.
-func (q *FIFOQueue) Next() (*url.URL, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	element := q.list.Front()
-	if element != nil {
-		q.list.Remove(element)
-		// fmt.Println("next is ", element.Value)
-		return element.Value.(*url.URL), nil // Type assertion
-	}
-	return nil, nil
 }
 
 // func (c *Crawler) Add(url *url.URL) error {
