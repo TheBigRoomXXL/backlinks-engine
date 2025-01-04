@@ -3,6 +3,7 @@ package telemetry
 import (
 	"log"
 	"os"
+	"strings"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
 )
@@ -39,6 +40,9 @@ func ErrorHandler() {
 			return
 		case err := <-ErrorChan:
 			Errors.Add(1)
+			if strings.Contains(err.Error(), "i/o timeout") {
+				TCPTimeout.Add(1)
+			}
 			logger.Println(err.Error())
 		}
 	}
