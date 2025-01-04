@@ -102,19 +102,19 @@ func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
 
 func (c *CrawlClient) Get(url string) (resp *http.Response, err error) {
 	req, err := http.NewRequest("GET", url, nil)
-	req.Header.Set("User-Agent", "BacklinksBot")
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("User-Agent", "BacklinksBot")
 	return c.Do(req)
 }
 
 func (c *CrawlClient) Head(url string) (resp *http.Response, err error) {
 	req, err := http.NewRequest("HEAD", url, nil)
-	req.Header.Set("User-Agent", "BacklinksBot")
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("User-Agent", "BacklinksBot")
 	return c.Do(req)
 }
 
