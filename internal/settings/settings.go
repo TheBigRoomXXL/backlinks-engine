@@ -3,6 +3,7 @@ package settings
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"sync"
@@ -93,6 +94,9 @@ func initSettings() {
 		if err != nil {
 			initError = fmt.Errorf("failed to parse HTTP_TIMEOUT as an int : %w", err)
 			return
+		}
+		if i == 0 {
+			slog.Warn("HTTP rate limiting is disable. Please only do so in local tests.")
 		}
 		httpRateLimit = rate.Limit(rate.Every(time.Duration(i * int(time.Second))))
 	}
