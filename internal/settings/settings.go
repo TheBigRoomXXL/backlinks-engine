@@ -75,7 +75,7 @@ func initSettings() {
 	var httpTimeout time.Duration
 	httpTimeoutStr, ok := os.LookupEnv("HTTP_TIMEOUT")
 	if !ok {
-		httpTimeout = 5 * time.Second
+		httpTimeout = 180 * time.Second // Google Timeout
 	} else {
 		i, err := strconv.Atoi(httpTimeoutStr)
 		if err != nil {
