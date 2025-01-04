@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -76,16 +77,40 @@ func cli(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to initialize crawler: %w", err)
 		}
-		for _, seed := range os.Args[2:] {
-			url, err := url.Parse(seed)
-			if err != nil {
-				return fmt.Errorf("failed to parsed seed: %w", err)
+		for _, arg := range os.Args[2:] {
+			_, error := os.Stat(arg)
+			if errors.Is(error, os.ErrNotExist) {
+				url, err := url.Parse(arg)
+				if err != nil {
+					return fmt.Errorf("failed to parsed seed: %w", err)
+				}
+				url, err = commons.NormalizeUrl(url)
+				if err != nil {
+					return fmt.Errorf("failed to normalize seed: %w", err)
+				}
+				crawler.AddUrl(url)
+			} else {
+				file, err := os.Open(arg)
+				if err != nil {
+					return fmt.Errorf("error opening input file: %s", err)
+				}
+				input, err := io.ReadAll(file)
+				if err != nil {
+					return fmt.Errorf("error reading input file: %s", err)
+				}
+				for _, seed := range strings.Fields(string(input)) {
+					url, err := url.Parse(seed)
+					if err != nil {
+						return fmt.Errorf("failed to parsed seed: %w", err)
+					}
+					url, err = commons.NormalizeUrl(url)
+					if err != nil {
+						return fmt.Errorf("failed to normalize seed: %w", err)
+					}
+					crawler.AddUrl(url)
+				}
 			}
-			url, err = commons.NormalizeUrl(url)
-			if err != nil {
-				return fmt.Errorf("failed to normalize seed: %w", err)
-			}
-			crawler.AddUrl(url)
+
 		}
 
 		return crawler.Run()
