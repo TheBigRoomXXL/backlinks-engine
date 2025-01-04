@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"slices"
 	"sync"
@@ -39,11 +40,23 @@ type CrawlClient struct {
 
 func NewCrawlClient(
 	ctx context.Context,
-	transport http.RoundTripper,
 	rateLimiter rate.Limit,
 	retryLimit int,
 	timeout time.Duration,
 ) *CrawlClient {
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100, // Default: 100
+		MaxIdleConnsPerHost:   2,   // Default: 2
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
 	c := &CrawlClient{
 		ctx:              ctx,
 		client:           &http.Client{Transport: transport, Timeout: timeout},

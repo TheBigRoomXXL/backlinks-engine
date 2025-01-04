@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"log/slog"
-	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -69,7 +68,7 @@ func cli(ctx context.Context) error {
 			return fmt.Errorf("faield to get setttings: %w", err)
 		}
 		fetcher := client.NewCrawlClient(
-			ctx, http.DefaultTransport, s.HTTP_RATE_LIMIT, s.HTTP_MAX_RETRY, s.HTTP_TIMEOUT,
+			ctx, s.HTTP_RATE_LIMIT, s.HTTP_MAX_RETRY, s.HTTP_TIMEOUT,
 		)
 		queue := queue.NewFIFOQueue()
 		crawler, err := crawler.NewCrawler(ctx, queue, fetcher)
