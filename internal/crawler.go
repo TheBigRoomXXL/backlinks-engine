@@ -30,7 +30,7 @@ func HTMLHandler(g *geziyor.Geziyor, r *client.Response) {
 
 		target, err := NormalizeUrlString(targetAbsolute.String())
 		if err != nil {
-			counterError <- fmt.Errorf("failed to normalize link %s", target)
+			// counterError <- fmt.Errorf("failed to normalize link %s: ,%w", target, err)
 			return
 		}
 		g.Get(target, HTMLHandler)
