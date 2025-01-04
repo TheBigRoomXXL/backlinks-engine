@@ -1,0 +1,19 @@
+- acutally save the collected data instead of running everything in memery.
+- add user agent to settings
+- use sitemap from robot.txt to add seeds
+- extract like from other things than \<a\>
+- XLM Parsing
+- verify content encodings behavior (gzip)
+- http caching with RFC 9111 (`Cache-Control`, `If-None-Match`, `Last-Modified`, `If-Modified-Since`, `Etag`...)
+- Seeding from RSS, Atom and JSON, WebSub for freshness
+- Automatated calibration of performance related settings (like concurency)
+- robot.txt support
+- add cookies support? Probably not.
+- Better url standardization
+- Parse WAT files from CC?
+- Restructure to avoid bottleneck and hand calibration:
+    - Separate `CRAWLER_MAX_CONCURENCY` into `HTTP_CONCURENCY_LIMIT` and `PARSER_CONCURENCY_LIMIT`. 
+    - Add settings `XXX_CONCURENCY_LIMIT_MIN`, `XXX_CONCURENCY_LIMIT_MAX` and `XXX_CONCURENCY_LIMIT_FINETUNING_ENABLED`,
+    - Then automate the finetuning of each limit based on metrics like `tcp io/timeout` and `cpu utilization`. This finetuning would happen every minute after the 5 first minutes with a 1% increment on current limit value and would stay in the user defined min/max.
+
+
