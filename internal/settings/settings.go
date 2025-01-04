@@ -14,17 +14,18 @@ import (
 )
 
 type Settings struct {
-	DB_USER          string
-	DB_PASSWORD      string
-	DB_HOSTNAME      string
-	DB_PORT          string
-	DB_NAME          string
-	DB_OPTIONS       string
-	HTTP_TIMEOUT     time.Duration // in seconds
-	HTTP_RATE_LIMIT  rate.Limit    // per domaine rate limit in req/s
-	HTTP_MAX_RETRY   int
-	LOG_PATH         string
-	TELEMETRY_LISTEN string
+	DB_USER                string
+	DB_PASSWORD            string
+	DB_HOSTNAME            string
+	DB_PORT                string
+	DB_NAME                string
+	DB_OPTIONS             string
+	HTTP_TIMEOUT           time.Duration // in seconds
+	HTTP_RATE_LIMIT        rate.Limit    // per domaine rate limit in req/s
+	HTTP_MAX_RETRY         int
+	CRAWLER_MAX_CONCURENCY int
+	LOG_PATH               string
+	TELEMETRY_LISTEN       string
 }
 
 var (
@@ -113,6 +114,18 @@ func initSettings() {
 		}
 	}
 
+	var crawlerMaxConcurency int
+	crawlerMaxConcurencyStr, ok := os.LookupEnv("CRAWLER_MAX_CONCURENCY")
+	if !ok {
+		crawlerMaxConcurency = 1024
+	} else {
+		crawlerMaxConcurency, err = strconv.Atoi(crawlerMaxConcurencyStr)
+		if err != nil {
+			initError = fmt.Errorf("failed to parse CRAWLER_MAX_CONCURENCY as an int : %w", err)
+			return
+		}
+	}
+
 	logPath, ok := os.LookupEnv("LOG_PATH")
 	if !ok {
 		logPath = "errors.log"
@@ -124,16 +137,17 @@ func initSettings() {
 	}
 
 	settings = &Settings{
-		DB_USER:          dbUser,
-		DB_PASSWORD:      dbPassword,
-		DB_HOSTNAME:      dbHostname,
-		DB_PORT:          dbPort,
-		DB_NAME:          dbName,
-		DB_OPTIONS:       dbOptions,
-		HTTP_TIMEOUT:     httpTimeout,
-		HTTP_RATE_LIMIT:  httpRateLimit,
-		HTTP_MAX_RETRY:   httpMaxRetry,
-		LOG_PATH:         logPath,
-		TELEMETRY_LISTEN: telemetryListen,
+		DB_USER:                dbUser,
+		DB_PASSWORD:            dbPassword,
+		DB_HOSTNAME:            dbHostname,
+		DB_PORT:                dbPort,
+		DB_NAME:                dbName,
+		DB_OPTIONS:             dbOptions,
+		HTTP_TIMEOUT:           httpTimeout,
+		HTTP_RATE_LIMIT:        httpRateLimit,
+		HTTP_MAX_RETRY:         httpMaxRetry,
+		CRAWLER_MAX_CONCURENCY: crawlerMaxConcurency,
+		LOG_PATH:               logPath,
+		TELEMETRY_LISTEN:       telemetryListen,
 	}
 }

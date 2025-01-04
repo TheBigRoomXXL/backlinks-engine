@@ -13,37 +13,43 @@ import (
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/client"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/queue"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"golang.org/x/sync/errgroup"
 )
 
 type Crawler struct {
-	ctx     context.Context
-	queue   queue.Queue
-	fetcher client.Fetcher
-	group   *errgroup.Group
+	ctx             context.Context
+	queue           queue.Queue
+	fetcher         client.Fetcher
+	group           *errgroup.Group
+	concurencyLimit int
 }
 
 func NewCrawler(ctx context.Context, queue queue.Queue, fetcher client.Fetcher) (*Crawler, error) {
+	s, err := settings.New()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get settings: %w", err)
+	}
+
 	group, ctx := errgroup.WithContext(ctx)
+	group.SetLimit(s.CRAWLER_MAX_CONCURENCY)
 
 	return &Crawler{
-		ctx:     ctx,
-		group:   group,
-		queue:   queue,
-		fetcher: fetcher,
+		ctx:             ctx,
+		group:           group,
+		queue:           queue,
+		fetcher:         fetcher,
+		concurencyLimit: s.CRAWLER_MAX_CONCURENCY,
 	}, nil
 }
 
 func (c *Crawler) AddUrl(url *url.URL) error {
-	// slog.Debug(fmt.Sprintf("adding %s to queue\n", url))
 	return c.queue.Add(url)
 }
 
 func (c *Crawler) Run() error {
-	limit := 2048
-	c.group.SetLimit(limit)
-	for i := 0; i < limit; i++ {
+	for i := 0; i < c.concurencyLimit; i++ {
 		c.group.Go(c.crawlNextPage)
 	}
 
@@ -54,7 +60,7 @@ func (c *Crawler) Run() error {
 		case <-c.ctx.Done():
 			return nil
 		case <-ticker.C:
-			for i := 0; i < limit; i++ {
+			for i := 0; i < c.concurencyLimit; i++ {
 				ok := c.group.TryGo(c.crawlNextPage)
 				if !ok {
 					break
