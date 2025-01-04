@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -47,6 +48,11 @@ func main() {
 }
 
 func cli(ctx context.Context) error {
+	// Hacky debug flag
+	if len(os.Args) > 2 && os.Args[1] == "--debug" {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+		os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
+	}
 
 	if len(os.Args) < 2 {
 		return errors.New("a command (crawl or vwww) is expected as argument")
@@ -79,7 +85,6 @@ func cli(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to normalize seed: %w", err)
 			}
-			fmt.Println(url)
 			crawler.AddUrl(url)
 		}
 

@@ -3,6 +3,7 @@ package crawler
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -51,7 +52,7 @@ func NewCrawler(ctx context.Context, queue queue.Queue, fetcher client.Fetcher) 
 }
 
 func (c *Crawler) AddUrl(url *url.URL) error {
-	// fmt.Printf("adding %s to queue\n", url)
+	// slog.Debug(fmt.Sprintf("adding %s to queue\n", url))
 	return c.queue.Add(url)
 }
 
@@ -92,45 +93,44 @@ func (c *Crawler) crawlNextPage() error {
 	// TODO: Robot.txt validation
 
 	urlStr := url.String()
-	// fmt.Println("processing ", url)
+	slog.Debug(fmt.Sprintf("processing %s", url))
 
 	resp, err := c.fetcher.Head(urlStr)
 	if err != nil {
-		// fmt.Printf("HEAD %s failed: %s\n", urlStr, err)
+		slog.Debug(fmt.Sprintf("HEAD %s failed: %s\n", urlStr, err))
 		telemetry.ErrorChan <- err
 		return nil
 	}
 	resp.Body.Close()
-	// fmt.Printf("HEAD %s done\n", urlStr)
+	slog.Debug(fmt.Sprintf("HEAD %s done\n", urlStr))
 
 	if !isResponsesCrawlable(resp) {
-		// fmt.Printf("HEAD %s response is not crawlable\n", urlStr)
+		slog.Debug(fmt.Sprintf("HEAD %s response is not crawlable\n", urlStr))
 		return nil
 	}
 
 	resp, err = c.fetcher.Get(urlStr)
 	if err != nil {
-		// fmt.Printf("Get %s failed: %s\n", urlStr, err)
+		slog.Debug(fmt.Sprintf("Get %s failed: %s\n", urlStr, err))
 		telemetry.ErrorChan <- err
 		return nil
 	}
 	defer resp.Body.Close()
-	// fmt.Printf("GET %s done\n", urlStr)
+	slog.Debug(fmt.Sprintf("GET %s done\n", urlStr))
 
 	// We double check in case the HEAD response was not representative
 	if !isResponsesCrawlable(resp) {
-		// fmt.Printf("GET %s response is not crawlable\n", urlStr)
+		slog.Debug(fmt.Sprintf("GET %s response is not crawlable\n", urlStr))
 		return nil
 	}
 
 	links, err := extractLinks(resp)
 	if err != nil {
-		// fmt.Printf("failed to extract links from %s : %s\n", urlStr, err)
+		slog.Debug(fmt.Sprintf("failed to extract links from %s : %s\n", urlStr, err))
 		telemetry.ErrorChan <- err
 		return nil
 	}
-	// fmt.Printf("%d links extacted from %s\n", len(links), urlStr)
-	// fmt.Println("links ", links)
+	slog.Debug(fmt.Sprintf("%d links extacted from %s\n", len(links), urlStr))
 
 	for _, link := range links {
 		c.AddUrl(link)
@@ -141,19 +141,19 @@ func (c *Crawler) crawlNextPage() error {
 
 func isResponsesCrawlable(resp *http.Response) bool {
 	if resp.StatusCode < 200 || resp.StatusCode > 299 || resp.StatusCode == 204 {
-		// fmt.Printf("resp %s has bad status: %d\n", resp.Request.URL, resp.StatusCode)
+		slog.Debug(fmt.Sprintf("resp %s has bad status: %d\n", resp.Request.URL, resp.StatusCode))
 		return false
 	}
 
 	contentType := resp.Header.Get("content-type")
 	if !strings.Contains(contentType, "html") {
-		// fmt.Printf("resp %s has bad content-type: %s\n", resp.Request.URL, resp.Header.Get("content-type"))
+		slog.Debug(fmt.Sprintf("resp %s has bad content-type: %s\n", resp.Request.URL, resp.Header.Get("content-type")))
 		return false
 	}
 
 	robotsTags := resp.Header.Get("x-robots-tag")
 	if strings.Contains(robotsTags, "nofollow") || strings.Contains(robotsTags, "noindex") {
-		// fmt.Printf("resp %s has bad robotag: %s\n", resp.Request.URL, robotsTags)
+		slog.Debug(fmt.Sprintf("resp %s has bad robotag: %s\n", resp.Request.URL, robotsTags))
 		return false
 	}
 	return true
@@ -163,7 +163,6 @@ func extractLinks(resp *http.Response) ([]*url.URL, error) {
 	links := make([]*url.URL, 0)
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		// fmt.Printf("failed to parse the HTML document: %s\n", err)
 		return nil, fmt.Errorf("failed to parse the HTML document: %w", err)
 	}
 
@@ -188,21 +187,3 @@ func extractLinks(resp *http.Response) ([]*url.URL, error) {
 
 	return links, nil
 }
-
-// func processHTMLNode(n *html.Node) string {
-// 	switch n.Data {
-// 	case "img":
-// 		// check for the src attribute in the img tag
-// 		for _, a := range n.Attr {
-// 			if a.Key == "src" {
-// 				// retrieve src value
-// 				return a.Val
-// 			}
-// 		}
-// 	}
-
-// 	// Traverse child nodes
-// 	for child := n.FirstChild; child != nil; child = child.NextSibling {
-// 		child.processHTMLNode(child)
-// 	}
-// }
