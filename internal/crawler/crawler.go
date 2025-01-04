@@ -12,11 +12,8 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/client"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/database"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/queue"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -25,29 +22,16 @@ type Crawler struct {
 	queue   queue.Queue
 	fetcher client.Fetcher
 	group   *errgroup.Group
-	pg      *pgxpool.Pool
-	s       *settings.Settings
 }
 
 func NewCrawler(ctx context.Context, queue queue.Queue, fetcher client.Fetcher) (*Crawler, error) {
 	group, ctx := errgroup.WithContext(ctx)
-	pg, err := database.NewPostgres(ctx)
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to get postgres connection pool: %w", err)
-	}
-
-	s, err := settings.New()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get settings connection pool: %w", err)
-	}
 	return &Crawler{
 		ctx:     ctx,
-		queue:   queue,
 		group:   group,
+		queue:   queue,
 		fetcher: fetcher,
-		pg:      pg,
-		s:       s,
 	}, nil
 }
 
