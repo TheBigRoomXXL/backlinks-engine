@@ -22,7 +22,7 @@ func init() {
 	if err != nil {
 		log.Fatal("failed to init telemetry: failed to create log file: %w", err)
 	}
-	logger = log.New(logFile, "", log.LUTC)
+	logger = log.New(logFile, "", log.LstdFlags)
 	go ErrorHandler()
 }
 
