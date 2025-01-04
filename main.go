@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/client"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/crawler"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/queue"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
@@ -74,6 +75,11 @@ func cli(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to parsed seed: %w", err)
 			}
+			url, err = commons.NormalizeUrl(url)
+			if err != nil {
+				return fmt.Errorf("failed to normalize seed: %w", err)
+			}
+			fmt.Println(url)
 			crawler.AddUrl(url)
 		}
 
@@ -99,7 +105,7 @@ func cli(ctx context.Context) error {
 				return fmt.Errorf("failed to parse nbSeed: %w", err)
 			}
 			t0 := time.Now()
-			err = vwww.GenerateVWWW(nbPage, nbSeed, fmt.Sprintf("vwww/%d", nbPage))
+			err = vwww.GenerateVWWW(ctx, nbPage, nbSeed, fmt.Sprintf("vwww/%d", nbPage))
 			if err != nil {
 				return fmt.Errorf("failed to generate vwww: %w", err)
 			}
