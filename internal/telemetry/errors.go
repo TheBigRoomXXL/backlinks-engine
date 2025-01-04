@@ -23,10 +23,10 @@ func init() {
 		log.Fatal("failed to init telemetry: failed to create log file: %w", err)
 	}
 	logger = log.New(logFile, "", log.LUTC)
-	go ErrorLogger()
+	go ErrorHandler()
 }
 
-func ErrorLogger() {
+func ErrorHandler() {
 	done := make(chan bool)
 	defer func() {
 		done <- true
