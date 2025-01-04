@@ -76,6 +76,10 @@ func NormalizeUrlString(urlRaw string) (string, error) {
 		return "", err
 	}
 
+	if url.Scheme == "" {
+		url.Scheme = "http"
+	}
+
 	if url.Scheme != "http" && url.Scheme != "https" {
 		return "", fmt.Errorf("url scheme is not http or https: %s", url.Scheme)
 	}
