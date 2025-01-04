@@ -1,10 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal"
@@ -15,7 +18,7 @@ func main() {
 
 	db, err := internal.NewDatabase(s)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to init db: ", err)
 	}
 	defer db.Close()
 
@@ -28,7 +31,35 @@ func main() {
 		log.Fatal("Invalid command: crawl or vwww is expected")
 	}
 	if cmd == "crawl" {
-		internal.Crawl(s, db, os.Args[2:])
+		seeds := make([]string, 0)
+		for _, arg := range os.Args[2:] {
+			_, error := os.Stat(arg)
+			if errors.Is(error, os.ErrNotExist) {
+				seed, err := internal.NormalizeUrlString(arg)
+				if err != nil {
+					log.Fatalf("failed to normalize seed: %s", err)
+				}
+				seeds = append(seeds, seed)
+			} else {
+				file, err := os.Open(arg)
+				if err != nil {
+					log.Fatalf("error opening input file: %s", err)
+				}
+				input, err := io.ReadAll(file)
+				if err != nil {
+					log.Fatalf("error reading input file: %s", err)
+				}
+				for _, arg := range strings.Fields(string(input)) {
+					seed, err := internal.NormalizeUrlString(arg)
+					if err != nil {
+						log.Fatalf("failed to normalize seed: %s", err)
+					}
+					seeds = append(seeds, seed)
+				}
+			}
+
+		}
+		internal.Crawl(s, db, seeds)
 	}
 	if cmd == "vwww" {
 		if len(os.Args) < 3 {

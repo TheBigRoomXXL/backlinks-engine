@@ -16,7 +16,7 @@ func initLogger(s *Settings) {
 	// Start the MetricLogger in a goroutine
 	logFile, err := os.Create(s.LOG_PATH)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to init log file: ", err)
 	}
 	logger = log.New(logFile, "", log.LUTC)
 	go MetricLogger()

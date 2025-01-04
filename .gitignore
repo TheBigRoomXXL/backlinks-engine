@@ -30,3 +30,7 @@ go.work.sum
 **.logs
 
 vwww/
+!internal/vwww
+seeds
+seeds.csv
+seeds.txt
