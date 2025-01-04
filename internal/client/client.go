@@ -118,7 +118,7 @@ func (c *CrawlClient) Get(url string) (resp *http.Response, err error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "BacklinksBot")
+	req.Header.Set("User-Agent", "	")
 	return c.Do(req)
 }
 

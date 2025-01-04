@@ -10,36 +10,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/TheBigRoomXXL/backlinks-engine/internal"
 	"golang.org/x/time/rate"
 )
 
-type mockTransport struct {
-	Response *http.Response
-	Err      error
-	NbCall   int
-	callback func(*mockTransport)
-}
-
-func NewMockTransport(resp *http.Response, err error) *mockTransport {
-	return &mockTransport{resp, err, 0, nil}
-}
-
-func NewMockTransportWithCallback(resp *http.Response, err error, callback func(*mockTransport)) *mockTransport {
-	return &mockTransport{resp, err, 0, callback}
-}
-
-func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if m.callback != nil {
-		m.callback(m)
-	}
-	m.NbCall++
-	return m.Response, m.Err
-}
-
 func NewResponse(statusCode int) *http.Response {
 	recorder := httptest.NewRecorder()
+	recorder.Header().Set("Content-Type", "text/html")
 	recorder.WriteHeader(statusCode)
-	recorder.Header().Add("Content-Type", "text/html")
 	recorder.WriteString(`
 	<!DOCTYPE html>
 	<html lang="en">
@@ -69,7 +47,7 @@ func TestCrawlClientGetSuccessfull(t *testing.T) {
 				0,
 				time.Second,
 			)
-			client.client.Transport = NewMockTransport(response, nil)
+			client.client.Transport = internal.NewMockTransport(response, nil)
 
 			result, err := client.Get("http://test.com/truc")
 			if err != nil {
@@ -99,7 +77,7 @@ func TestCrawlClientHeadSuccessfull(t *testing.T) {
 				0,
 				time.Second,
 			)
-			client.client.Transport = NewMockTransport(response, nil)
+			client.client.Transport = internal.NewMockTransport(response, nil)
 
 			// Test
 			result, err := client.Head("http://test.com/truc")
@@ -121,7 +99,7 @@ func TestCrawlClientGetFailed(t *testing.T) {
 	// Setup
 	err := errors.New("test-error")
 	client := NewCrawlClient(context.Background(), rate.Limit(100000), 0, time.Second)
-	client.client.Transport = NewMockTransport(nil, err)
+	client.client.Transport = internal.NewMockTransport(nil, err)
 
 	// Test
 	result, errResult := client.Get("http://test.com/truc")
@@ -137,7 +115,7 @@ func TestCrawlClientHeadFailed(t *testing.T) {
 	// Setup
 	err := errors.New("test-error")
 	client := NewCrawlClient(context.Background(), rate.Limit(100000), 0, time.Second)
-	client.client.Transport = NewMockTransport(nil, err)
+	client.client.Transport = internal.NewMockTransport(nil, err)
 
 	// Test
 	result, errResult := client.Head("http://test.com/truc")
@@ -158,7 +136,7 @@ func TestCrawlRateLimitGet(t *testing.T) {
 		0,
 		time.Second,
 	)
-	client.client.Transport = NewMockTransport(response, nil)
+	client.client.Transport = internal.NewMockTransport(response, nil)
 
 	// Test
 	t0 := time.Now()
@@ -180,7 +158,7 @@ func TestCrawlRateLimitGetAndHead(t *testing.T) {
 		0,
 		time.Second,
 	)
-	client.client.Transport = NewMockTransport(response, nil)
+	client.client.Transport = internal.NewMockTransport(response, nil)
 
 	// Test
 	t0 := time.Now()
@@ -201,7 +179,7 @@ func TestCrawlRateLimitMultiDomainGet(t *testing.T) {
 		0,
 		time.Second,
 	)
-	client.client.Transport = NewMockTransport(response, nil)
+	client.client.Transport = internal.NewMockTransport(response, nil)
 
 	// Test
 	t0 := time.Now()
@@ -223,7 +201,7 @@ func TestCrawlRateLimitMultiDomainGet2(t *testing.T) {
 		0,
 		time.Second,
 	)
-	client.client.Transport = NewMockTransport(response, nil)
+	client.client.Transport = internal.NewMockTransport(response, nil)
 
 	// Test
 	t0 := time.Now()
@@ -251,7 +229,7 @@ func TestCrawlRateLimitMultiDomainHead(t *testing.T) {
 		0,
 		time.Second,
 	)
-	client.client.Transport = NewMockTransport(response, nil)
+	client.client.Transport = internal.NewMockTransport(response, nil)
 
 	// Test
 	t0 := time.Now()
@@ -273,7 +251,7 @@ func TestCrawlRateLimitMultiDomainHead2(t *testing.T) {
 		0,
 		time.Second,
 	)
-	client.client.Transport = NewMockTransport(response, nil)
+	client.client.Transport = internal.NewMockTransport(response, nil)
 
 	// Test
 	t0 := time.Now()
@@ -296,7 +274,7 @@ func TestCrawlDynamicRateLimiting(t *testing.T) {
 	// Setup
 	requestFrequence := rate.Limit(10)
 	client := NewCrawlClient(context.Background(), requestFrequence, 0, time.Second)
-	client.client.Transport = NewMockTransport(NewResponse(429), nil)
+	client.client.Transport = internal.NewMockTransport(NewResponse(429), nil)
 
 	// Test
 	client.Get("http://test.com/truc")
@@ -309,12 +287,12 @@ func TestCrawlDynamicRateLimiting(t *testing.T) {
 func TestCrawlRetryStopAfterGoodResponse(t *testing.T) {
 	responseA := NewResponse(408)
 	responseB := NewResponse(200)
-	callback := func(m *mockTransport) {
+	callback := func(m *internal.MockTransport) {
 		if m.NbCall > 0 {
 			m.Response = responseB
 		}
 	}
-	mock := NewMockTransportWithCallback(responseA, nil, callback)
+	mock := internal.NewMockTransportWithCallback(responseA, nil, callback)
 	client := NewCrawlClient(
 		context.Background(),
 		rate.Limit(1000000000),
@@ -341,14 +319,14 @@ func TestCrawlRetryCount(t *testing.T) {
 		t.Run("Retry after  "+strconv.Itoa(statusCode), func(t *testing.T) {
 			t.Parallel()
 			response := NewResponse(statusCode)
-			mock := NewMockTransport(response, nil)
+			mock := internal.NewMockTransport(response, nil)
 			client := NewCrawlClient(
 				context.Background(), rate.Limit(1000000000), n, time.Second,
 			)
 			client.client.Transport = mock
 
 			client.Get("http://test.com/truc")
-			// +1 is for inital call
+			// +1 is for initial call
 			if mock.NbCall != 5+1 {
 				t.Fatalf("Retried wrong number of time: want %d, got %d", n, mock.NbCall)
 			}
@@ -362,7 +340,7 @@ func TestCrawlRetryBackoff(t *testing.T) {
 	client := NewCrawlClient(
 		context.Background(), requestFrequence, 3, time.Second,
 	)
-	client.client.Transport = NewMockTransport(response, nil)
+	client.client.Transport = internal.NewMockTransport(response, nil)
 
 	// Test
 	t0 := time.Now()

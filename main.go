@@ -19,6 +19,7 @@ import (
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/crawler"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/queue"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/robot"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/vwww"
@@ -71,7 +72,8 @@ func cli(ctx context.Context) error {
 			ctx, s.HTTP_RATE_LIMIT, s.HTTP_MAX_RETRY, s.HTTP_TIMEOUT,
 		)
 		queue := queue.NewFIFOQueue()
-		crawler, err := crawler.NewCrawler(ctx, queue, fetcher)
+		robot := robot.NewInMemoryRobotPolicy(fetcher)
+		crawler, err := crawler.NewCrawler(ctx, queue, fetcher, robot)
 
 		if err != nil {
 			return fmt.Errorf("failed to initialize crawler: %w", err)

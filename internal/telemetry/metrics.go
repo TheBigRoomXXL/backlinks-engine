@@ -9,10 +9,12 @@ import (
 )
 
 var (
-	ProcessedURL *expvar.Int
-	Errors       *expvar.Int
-	QueueSize    *expvar.Int
-	TCPTimeout   *expvar.Int
+	ProcessedURL    *expvar.Int
+	Errors          *expvar.Int
+	QueueSize       *expvar.Int
+	TCPTimeout      *expvar.Int
+	RobotAllowed    *expvar.Int
+	RobotDisallowed *expvar.Int
 )
 
 func init() {
@@ -20,6 +22,8 @@ func init() {
 	Errors = expvar.NewInt("Errors")
 	TCPTimeout = expvar.NewInt("TCPTimeout")
 	QueueSize = expvar.NewInt("QueueSize")
+	RobotAllowed = expvar.NewInt("RobotAllowed")
+	RobotDisallowed = expvar.NewInt("RobotDisallowed")
 }
 
 func MetricsReport(ctx context.Context) {
@@ -39,8 +43,8 @@ func MetricsReport(ctx context.Context) {
 		case <-ticker.C:
 			uptime := time.Since(start).Round(time.Second)
 			fmt.Printf(
-				"\r│ %13s │ %13d │ %13d │ %13d │ %13d |",
-				uptime, ProcessedURL.Value(), Errors.Value(), TCPTimeout.Value(), QueueSize.Value(),
+				"\r│ %13s │ %13d │ %13d │ %13d │ %13d │ %13d │ %13d │",
+				uptime, ProcessedURL.Value(), Errors.Value(), TCPTimeout.Value(), QueueSize.Value(), RobotAllowed.Value(), RobotDisallowed.Value(),
 			)
 			if int(uptime.Seconds())%30 == 0 {
 				fmt.Print("\n")

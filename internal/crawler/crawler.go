@@ -13,6 +13,7 @@ import (
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/client"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/queue"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/robot"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"golang.org/x/sync/errgroup"
@@ -22,11 +23,17 @@ type Crawler struct {
 	ctx             context.Context
 	queue           queue.Queue
 	fetcher         client.Fetcher
+	robot           robot.RobotPolicy
 	group           *errgroup.Group
 	concurencyLimit int
 }
 
-func NewCrawler(ctx context.Context, queue queue.Queue, fetcher client.Fetcher) (*Crawler, error) {
+func NewCrawler(
+	ctx context.Context,
+	queue queue.Queue,
+	fetcher client.Fetcher,
+	robot robot.RobotPolicy,
+) (*Crawler, error) {
 	s, err := settings.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get settings: %w", err)
@@ -40,6 +47,7 @@ func NewCrawler(ctx context.Context, queue queue.Queue, fetcher client.Fetcher) 
 		group:           group,
 		queue:           queue,
 		fetcher:         fetcher,
+		robot:           robot,
 		concurencyLimit: s.CRAWLER_MAX_CONCURENCY,
 	}, nil
 }
@@ -80,7 +88,12 @@ func (c *Crawler) crawlNextPage() error {
 	}
 	defer telemetry.ProcessedURL.Add(1)
 
-	// TODO: Robot.txt validation
+	if !c.robot.IsAllowed(url) {
+		telemetry.RobotDisallowed.Add(1)
+		return nil
+	} else {
+		telemetry.RobotAllowed.Add(1)
+	}
 
 	urlStr := url.String()
 	slog.Debug(fmt.Sprintf("processing %s", url))
