@@ -184,10 +184,9 @@ func TestCrawlRateLimitGetAndHead(t *testing.T) {
 	t0 := time.Now()
 	client.Get("http://test.com/truc")
 	client.Head("http://test.com/truc")
-	client.Get("http://test.com/truc")
 	result := time.Since(t0)
-	if result < 20*time.Millisecond || result > 25*time.Millisecond {
-		t.Fatalf("GET and HEAD requests do not seem to share rate limit: 3 request in %s", result)
+	if result > 5*time.Millisecond {
+		t.Fatalf("GET and HEAD requests should not share the same rate limiter: 2 request in %s", result)
 	}
 }
 
@@ -297,7 +296,7 @@ func TestCrawlDynamicRateLimiting(t *testing.T) {
 	client := NewCrawlClient(context.Background(), mock, requestFrequence, 0, time.Second)
 
 	client.Get("http://test.com/truc")
-	result := client.ratelimiters["test.com"].Limit()
+	result := client.getRatelimiters["test.com"].Limit()
 	if result != 5.0 {
 		t.Fatalf("bad rate limit: want 50req/s; got %.2freq/s ", result)
 	}

@@ -24,13 +24,17 @@ type Fetcher interface {
 //   - per domain rate limiting
 //   - automated retry
 //   - custom user agent
+//
+// NOTE: HEAD and GET requests have different request limiters otherwise all GET requests
+// will be stopped by HEAD requests (wich are queued first) instead of working in tandem.
 type CrawlClient struct {
-	ctx          context.Context
-	client       *http.Client
-	ratelimiters map[string]*rate.Limiter
-	rateLimit    rate.Limit
-	retryLimit   int
-	lock         *sync.RWMutex
+	ctx              context.Context
+	client           *http.Client
+	headRatelimiters map[string]*rate.Limiter
+	getRatelimiters  map[string]*rate.Limiter
+	rateLimit        rate.Limit
+	retryLimit       int
+	lock             *sync.RWMutex
 }
 
 func NewCrawlClient(
@@ -41,18 +45,19 @@ func NewCrawlClient(
 	timeout time.Duration,
 ) *CrawlClient {
 	c := &CrawlClient{
-		ctx:          ctx,
-		client:       &http.Client{Transport: transport, Timeout: timeout},
-		rateLimit:    rateLimiter,
-		ratelimiters: make(map[string]*rate.Limiter, 1024),
-		retryLimit:   retryLimit,
-		lock:         &sync.RWMutex{},
+		ctx:              ctx,
+		client:           &http.Client{Transport: transport, Timeout: timeout},
+		rateLimit:        rateLimiter,
+		headRatelimiters: make(map[string]*rate.Limiter, 1024),
+		getRatelimiters:  make(map[string]*rate.Limiter, 1024),
+		retryLimit:       retryLimit,
+		lock:             &sync.RWMutex{},
 	}
 	return c
 }
 
 func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
-	rateLimiter := c.getRateLimiter(req.Host)
+	rateLimiter := c.getRateLimiter(req.Method, req.Host)
 	err := rateLimiter.Wait(c.ctx) // This is a blocking call. Honors the rate limit
 	if err != nil {
 		return nil, fmt.Errorf("error while waiting for rate limit: %w", err)
@@ -113,14 +118,30 @@ func (c *CrawlClient) Head(url string) (resp *http.Response, err error) {
 	return c.Do(req)
 }
 
-func (c *CrawlClient) getRateLimiter(hostname string) *rate.Limiter {
+// Return the matching ratelimiter in a concurency-safe way.
+// Return nil if bad method is given. Method must be uppercase.
+func (c *CrawlClient) getRateLimiter(method string, hostname string) *rate.Limiter {
+	var rateLimiter *rate.Limiter
+	var ok bool
 	c.lock.RLock()
-	rateLimiter, ok := c.ratelimiters[hostname]
+	switch method {
+	case "GET":
+		rateLimiter, ok = c.getRatelimiters[hostname]
+	case "HEAD":
+		rateLimiter, ok = c.headRatelimiters[hostname]
+	default:
+		return nil
+	}
 	c.lock.RUnlock()
 	if !ok {
 		c.lock.Lock()
-		rateLimiter = rate.NewLimiter(c.rateLimit, 1)
-		c.ratelimiters[hostname] = rateLimiter
+		if method == "HEAD" {
+			rateLimiter = rate.NewLimiter(c.rateLimit, 1)
+			c.headRatelimiters[hostname] = rateLimiter
+		} else {
+			rateLimiter = rate.NewLimiter(c.rateLimit, 1)
+			c.getRatelimiters[hostname] = rateLimiter
+		}
 		c.lock.Unlock()
 	}
 	return rateLimiter
