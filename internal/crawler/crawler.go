@@ -14,7 +14,6 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	clientpkg "github.com/TheBigRoomXXL/backlinks-engine/internal/client"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/exporter"
 	exportpkg "github.com/TheBigRoomXXL/backlinks-engine/internal/exporter"
 	queuepkg "github.com/TheBigRoomXXL/backlinks-engine/internal/queue"
 	robotpkg "github.com/TheBigRoomXXL/backlinks-engine/internal/robot"
@@ -39,7 +38,6 @@ func NewCrawler(
 	fetcher clientpkg.Fetcher,
 	robot robotpkg.RobotPolicy,
 	exporter exportpkg.Exporter,
-
 	max_concurency int,
 ) *Crawler {
 	group, ctx := errgroup.WithContext(ctx)
@@ -104,8 +102,6 @@ func (c *Crawler) crawlNextPage() error {
 	}
 
 	pageUrlStr := pageUrl.String()
-	slog.Debug(fmt.Sprintf("processing %s", pageUrl))
-
 	resp, err := c.fetcher.Head(pageUrlStr)
 	if err != nil {
 		slog.Debug(fmt.Sprintf("HEAD %s failed: %s\n", pageUrlStr, err))
@@ -113,7 +109,6 @@ func (c *Crawler) crawlNextPage() error {
 		return nil
 	}
 	resp.Body.Close()
-	slog.Debug(fmt.Sprintf("HEAD %s done\n", pageUrlStr))
 
 	if !isResponsesCrawlable(resp) {
 		slog.Debug(fmt.Sprintf("HEAD %s response is not crawlable\n", pageUrlStr))
@@ -127,7 +122,6 @@ func (c *Crawler) crawlNextPage() error {
 		return nil
 	}
 	defer resp.Body.Close()
-	slog.Debug(fmt.Sprintf("GET %s done\n", pageUrlStr))
 
 	// We double check in case the HEAD response was not representative
 	if !isResponsesCrawlable(resp) {
@@ -141,7 +135,6 @@ func (c *Crawler) crawlNextPage() error {
 		telemetry.ErrorChan <- err
 		return nil
 	}
-	slog.Debug(fmt.Sprintf("%d links extacted from %s\n", len(links), pageUrlStr))
 
 	linkSet := make(map[string]*url.URL)
 	for _, link := range links {
@@ -153,7 +146,7 @@ func (c *Crawler) crawlNextPage() error {
 	}
 
 	telemetry.LinkPaire.Add(int64(len(linkSet)))
-	c.exportChan <- &exporter.LinkGroup{
+	c.exportChan <- &exportpkg.LinkGroup{
 		From: pageUrl,
 		To:   slices.Collect(maps.Values(linkSet)),
 	}
