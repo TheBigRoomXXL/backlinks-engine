@@ -16,8 +16,8 @@ var (
 func init() {
 	s, _ := settings.New()
 	// Start the MetricLogger in a goroutine
-	// TODO: add `os.O_APPEND` once the app is stable
-	logFile, err := os.OpenFile(s.LOG_PATH, os.O_CREATE, 0640)
+	// TODO: append instead of tunc once tests app is stable
+	logFile, err := os.OpenFile(s.LOG_PATH, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0640)
 	if err != nil {
 		log.Fatal("failed to init telemetry: failed to create log file: ", err)
 	}
@@ -41,6 +41,7 @@ func ErrorHandler() {
 			if strings.Contains(err.Error(), "i/o timeout") {
 				TCPTimeout.Add(1)
 			}
+
 			logger.Println(err.Error())
 		}
 	}
