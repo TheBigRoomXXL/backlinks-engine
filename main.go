@@ -21,7 +21,6 @@ import (
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/queue"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/robot"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/vwww"
 )
 
@@ -62,56 +61,24 @@ func cli(ctx context.Context) error {
 	cmd := os.Args[1]
 
 	if cmd == "crawl" {
-		go telemetry.MetricsReport(ctx)
-
-		s, err := settings.New()
-		if err != nil {
-			return fmt.Errorf("faield to get setttings: %w", err)
+		s, ok := settings.New()
+		if !ok {
+			return errors.New("failed to initialize setttings properly")
 		}
+
 		fetcher := client.NewCrawlClient(
 			ctx, s.HTTP_RATE_LIMIT, s.HTTP_MAX_RETRY, s.HTTP_TIMEOUT,
 		)
 		queue := queue.NewFIFOQueue()
 		robot := robot.NewInMemoryRobotPolicy(fetcher)
-		crawler, err := crawler.NewCrawler(ctx, queue, fetcher, robot)
+		crawler := crawler.NewCrawler(ctx, queue, fetcher, robot, s.CRAWLER_MAX_CONCURENCY)
 
+		seeds, err := parseSeeds(os.Args[2:])
 		if err != nil {
-			return fmt.Errorf("failed to initialize crawler: %w", err)
+			return fmt.Errorf("fail to parse argument: %w", err)
 		}
-		for _, arg := range os.Args[2:] {
-			_, error := os.Stat(arg)
-			if errors.Is(error, os.ErrNotExist) {
-				url, err := url.Parse(arg)
-				if err != nil {
-					return fmt.Errorf("failed to parsed seed: %w", err)
-				}
-				url, err = commons.NormalizeUrl(url)
-				if err != nil {
-					return fmt.Errorf("failed to normalize seed: %w", err)
-				}
-				crawler.AddUrl(url)
-			} else {
-				file, err := os.Open(arg)
-				if err != nil {
-					return fmt.Errorf("error opening input file: %s", err)
-				}
-				input, err := io.ReadAll(file)
-				if err != nil {
-					return fmt.Errorf("error reading input file: %s", err)
-				}
-				for _, seed := range strings.Fields(string(input)) {
-					url, err := url.Parse(seed)
-					if err != nil {
-						return fmt.Errorf("failed to parsed seed: %w", err)
-					}
-					url, err = commons.NormalizeUrl(url)
-					if err != nil {
-						return fmt.Errorf("failed to normalize seed: %w", err)
-					}
-					crawler.AddUrl(url)
-				}
-			}
-
+		for _, seed := range seeds {
+			crawler.AddUrl(seed)
 		}
 
 		return crawler.Run()
@@ -156,4 +123,44 @@ func cli(ctx context.Context) error {
 	}
 
 	return errors.New("invalid command: crawl or vwww is expected")
+}
+
+func parseSeeds(args []string) ([]*url.URL, error) {
+	seeds := make([]*url.URL, 0)
+	for _, arg := range args {
+		_, error := os.Stat(arg)
+		if errors.Is(error, os.ErrNotExist) {
+			url, err := url.Parse(arg)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parsed seed: %w", err)
+			}
+			url, err = commons.NormalizeUrl(url)
+			if err != nil {
+				return nil, fmt.Errorf("failed to normalize seed: %w", err)
+			}
+			seeds = append(seeds, url)
+		} else {
+			file, err := os.Open(arg)
+			if err != nil {
+				return nil, fmt.Errorf("error opening input file: %s", err)
+			}
+			input, err := io.ReadAll(file)
+			if err != nil {
+				return nil, fmt.Errorf("error reading input file: %s", err)
+			}
+			for _, seed := range strings.Fields(string(input)) {
+				url, err := url.Parse(seed)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parsed seed: %w", err)
+				}
+				url, err = commons.NormalizeUrl(url)
+				if err != nil {
+					return nil, fmt.Errorf("failed to normalize seed: %w", err)
+				}
+				seeds = append(seeds, url)
+			}
+		}
+
+	}
+	return seeds, nil
 }

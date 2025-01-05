@@ -14,7 +14,6 @@ import (
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/queue"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/robot"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"golang.org/x/sync/errgroup"
 )
@@ -33,14 +32,10 @@ func NewCrawler(
 	queue queue.Queue,
 	fetcher client.Fetcher,
 	robot robot.RobotPolicy,
-) (*Crawler, error) {
-	s, err := settings.New()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get settings: %w", err)
-	}
-
+	max_concurency int,
+) *Crawler {
 	group, ctx := errgroup.WithContext(ctx)
-	group.SetLimit(s.CRAWLER_MAX_CONCURENCY)
+	group.SetLimit(max_concurency)
 
 	return &Crawler{
 		ctx:             ctx,
@@ -48,8 +43,8 @@ func NewCrawler(
 		queue:           queue,
 		fetcher:         fetcher,
 		robot:           robot,
-		concurencyLimit: s.CRAWLER_MAX_CONCURENCY,
-	}, nil
+		concurencyLimit: max_concurency,
+	}
 }
 
 func (c *Crawler) AddUrl(url *url.URL) error {

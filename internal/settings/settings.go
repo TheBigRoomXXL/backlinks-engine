@@ -1,8 +1,6 @@
 package settings
 
 import (
-	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
@@ -29,29 +27,38 @@ type Settings struct {
 }
 
 var (
-	settings  *Settings
-	initError error
-	initOnce  sync.Once
+	settings *Settings
+	initOnce sync.Once
+	initOk   = true
 )
 
-func New() (*Settings, error) {
+// Initialize a new settings object from environnment variable and .env
+//
+// The level of strictness we want while parsing the settings depends on the context. So
+// rather than returning an error when we enconter an issue, we emit a warning and return
+// an "ok" status. That way, the caller can ignore it or stop itself based on the strictness
+// it require.
+func New() (*Settings, bool) {
 	initOnce.Do(initSettings)
-	return settings, initError
+	return settings, initOk
 }
 
 func initSettings() {
 	err := godotenv.Load(".env")
 	if err != nil && err.Error() != "open .env: no such file or directory" {
-		initError = fmt.Errorf("failed to load .env file: %w", err)
+		initOk = false
+		slog.Warn("failed to load .env file: " + err.Error())
 	}
 
 	dbUser, ok := os.LookupEnv("DB_USER")
 	if !ok {
-		initError = errors.New("environnment $DB_USER must be set")
+		dbUser = "backlinks-engine"
 	}
 	dbPassword, ok := os.LookupEnv("DB_PASSWORD")
 	if !ok {
-		initError = errors.New("environnment $DB_PASSWORD must be set")
+		initOk = false
+		slog.Warn("environnment $DB_PASSWORD is not set, defaulting to \"\"")
+		dbPassword = ""
 	}
 	dbHostname, ok := os.LookupEnv("DB_HOSTNAME")
 	if !ok {
@@ -80,8 +87,9 @@ func initSettings() {
 	} else {
 		i, err := strconv.Atoi(httpTimeoutStr)
 		if err != nil {
-			initError = fmt.Errorf("failed to parse HTTP_TIMEOUT as an int : %w", err)
-			return
+			initOk = false
+			slog.Warn("failed to parse HTTP_TIMEOUT as an int (defaulting to 180s) : " + err.Error())
+			i = 180
 		}
 		httpTimeout = time.Duration(i * int(time.Second))
 	}
@@ -93,24 +101,27 @@ func initSettings() {
 	} else {
 		i, err := strconv.Atoi(httpRateLimitStr)
 		if err != nil {
-			initError = fmt.Errorf("failed to parse HTTP_TIMEOUT as an int : %w", err)
-			return
+			initOk = false
+			slog.Warn("failed to parse HTTP_RATE_LIMIT as an int (defaulting to 5): " + err.Error())
+			i = 5
 		}
 		if i == 0 {
+			initOk = false
 			slog.Warn("HTTP rate limiting is disable. Please only do so in local tests.")
 		}
 		httpRateLimit = rate.Limit(rate.Every(time.Duration(i * int(time.Second))))
 	}
 
 	var httpMaxRetry int
-	httpMaxRetryStr, ok := os.LookupEnv("HTTP_TIMEOUT")
+	httpMaxRetryStr, ok := os.LookupEnv("HTTP_MAX_RETRY")
 	if !ok {
 		httpMaxRetry = 3
 	} else {
 		httpMaxRetry, err = strconv.Atoi(httpMaxRetryStr)
 		if err != nil {
-			initError = fmt.Errorf("failed to parse HTTP_TIMEOUT as an int : %w", err)
-			return
+			initOk = false
+			slog.Warn("failed to parse HTTP_MAX_RETRY as an int (defaulting to 3): " + err.Error())
+			httpMaxRetry = 3
 		}
 	}
 
@@ -121,8 +132,9 @@ func initSettings() {
 	} else {
 		crawlerMaxConcurency, err = strconv.Atoi(crawlerMaxConcurencyStr)
 		if err != nil {
-			initError = fmt.Errorf("failed to parse CRAWLER_MAX_CONCURENCY as an int : %w", err)
-			return
+			initOk = false
+			slog.Warn("failed to parse CRAWLER_MAX_CONCURENCY as an int (defaulting to 1024): " + err.Error())
+			crawlerMaxConcurency = 1024
 		}
 	}
 

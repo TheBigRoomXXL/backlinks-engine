@@ -14,12 +14,10 @@ var (
 )
 
 func init() {
-	s, err := settings.New()
-	if err != nil {
-		log.Fatal("failed to init telemetry: failed to get settings: ", err)
-	}
+	s, _ := settings.New()
 	// Start the MetricLogger in a goroutine
-	logFile, err := os.Create(s.LOG_PATH)
+	// TODO: add `os.O_APPEND` once the app is stable
+	logFile, err := os.OpenFile(s.LOG_PATH, os.O_CREATE, 0640)
 	if err != nil {
 		log.Fatal("failed to init telemetry: failed to create log file: ", err)
 	}
