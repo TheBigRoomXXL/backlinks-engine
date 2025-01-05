@@ -1,4 +1,4 @@
-package database
+package storage
 
 // Pool management adapted from
 // https://donchev.is/post/working-with-postgresql-in-go-using-pgx/#connection-pool-setup
