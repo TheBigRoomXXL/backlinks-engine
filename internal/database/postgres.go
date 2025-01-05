@@ -8,19 +8,20 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
-	pool      *pgxpool.Pool
-	initError error
-	initOnce  sync.Once
-	ctx       context.Context
+	pool        *pgxpool.Pool
+	initError   error
+	initOnce    sync.Once
+	ctx         context.Context
+	postgresURI string
 )
 
-func NewPostgres(newctx context.Context) (*pgxpool.Pool, error) {
-	ctx = newctx
+func NewPostgres(initCtx context.Context, initPostgresURI string) (*pgxpool.Pool, error) {
+	ctx = initCtx
+	postgresURI = initPostgresURI
 	initOnce.Do(initDatabase)
 	return pool, initError
 }
@@ -34,25 +35,9 @@ func initDatabase() {
 		}
 	}()
 
-	// Get settings
-	s, err := settings.New()
-	if err != nil {
-		initError = err
-		return
-	}
-
 	// Create connection pool
-	uri := fmt.Sprintf(
-		"postgresql://%s:%s@%s:%s/%s?%s",
-		s.DB_USER,
-		s.DB_PASSWORD,
-		s.DB_HOSTNAME,
-		s.DB_PORT,
-		s.DB_NAME,
-		s.DB_OPTIONS,
-	)
 	ctx := context.Background()
-	pool, err = pgxpool.New(ctx, uri)
+	pool, err := pgxpool.New(ctx, postgresURI)
 	if err != nil {
 		initError = fmt.Errorf("failed to create connection pool: %w", err)
 		return
