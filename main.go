@@ -22,6 +22,7 @@ import (
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/queue"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/robot"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/storage"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/vwww"
 )
@@ -68,15 +69,23 @@ func cli(ctx context.Context) error {
 			return errors.New("failed to initialize setttings properly")
 		}
 
-		csvFile, err := os.OpenFile("links.csv", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0640)
-		if err != nil {
-			return fmt.Errorf("failed to open the csv export file: %w", err)
-		}
-		exporter := exporter.NewCSVExporter(csvFile)
-		fetcher := client.NewCrawlClient(
-			ctx, s.HTTP_RATE_LIMIT, s.HTTP_MAX_RETRY, s.HTTP_TIMEOUT,
+		PostgresURI := fmt.Sprintf(
+			"postgresql://%s:%s@%s:%s/%s?%s",
+			s.DB_USER,
+			s.DB_PASSWORD,
+			s.DB_HOSTNAME,
+			s.DB_PORT,
+			s.DB_NAME,
+			s.DB_OPTIONS,
 		)
+
+		postgres, err := storage.NewPostgres(ctx, PostgresURI)
+		if err != nil {
+			return fmt.Errorf("failed init postgres connection pool: %w", err)
+		}
 		queue := queue.NewFIFOQueue()
+		exporter := exporter.NewPostgresExporter(postgres)
+		fetcher := client.NewCrawlClient(ctx, s.HTTP_RATE_LIMIT, s.HTTP_MAX_RETRY, s.HTTP_TIMEOUT)
 		robot := robot.NewInMemoryRobotPolicy(fetcher)
 		crawler := crawler.NewCrawler(ctx, queue, fetcher, robot, exporter, s.CRAWLER_MAX_CONCURENCY)
 
