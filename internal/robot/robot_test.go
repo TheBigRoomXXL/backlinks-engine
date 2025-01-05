@@ -11,6 +11,8 @@ import (
 	"github.com/TheBigRoomXXL/backlinks-engine/internal"
 )
 
+var norobot = "#failed-to-get-robot.txt"
+
 func TestRobotGetPolicySuccess(t *testing.T) {
 	// Setup
 	policy := `
@@ -51,8 +53,8 @@ func TestRobotGetPolicyBadResponseStatus(t *testing.T) {
 
 			// Test
 			result := robot.getRobotPolicy("test.com")
-			if result != "" {
-				t.Fatalf("failed to handle bad status: want '%s'; got '%s'\n", "", result)
+			if result != norobot {
+				t.Fatalf("failed to handle bad status: want '%s'; got '%s'\n", norobot, result)
 			}
 		})
 	}
@@ -75,8 +77,8 @@ func TestRobotGetPolicyBadContentType(t *testing.T) {
 
 			// Test
 			result := robot.getRobotPolicy("test.com")
-			if result != "" {
-				t.Fatalf("failed to handle bad status: want '%s'; got '%s'\n", "", result)
+			if result != norobot {
+				t.Fatalf("failed to handle bad status: want '%s'; got '%s'\n", norobot, result)
 			}
 		})
 	}
