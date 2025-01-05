@@ -5,7 +5,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
-	"net/url"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 )
@@ -21,8 +20,8 @@ func NewCSVExporter(stream io.WriteCloser) *CSVExporter {
 	return &CSVExporter{stream, csv.NewWriter(stream)}
 }
 
-func (e *CSVExporter) Listen(ctx context.Context, urlChan chan url.URL) {
-	var url url.URL
+func (e *CSVExporter) Listen(ctx context.Context, urlChan chan *LinkGroup) {
+	var group *LinkGroup
 	i := 0
 	for {
 		select {
@@ -30,18 +29,19 @@ func (e *CSVExporter) Listen(ctx context.Context, urlChan chan url.URL) {
 			e.csv.Flush()
 			e.stream.Close()
 			return
-		case url = <-urlChan:
+		case group = <-urlChan:
 			// Write to buffer
-			err := e.csv.Write([]string{url.String()})
-			if err != nil {
-				telemetry.ErrorChan <- fmt.Errorf("failed to export url to csv: %w", err)
-			}
-
-			// Flush buffer periodically
-			i++
-			if i%CSV_BATCH_SIZE == 0 {
-				e.csv.Flush()
-				i = 0
+			for _, to := range group.To {
+				err := e.csv.Write([]string{group.From.String(), to.String()})
+				if err != nil {
+					telemetry.ErrorChan <- fmt.Errorf("failed to export url to csv: %w", err)
+				}
+				// Flush buffer periodically
+				i++
+				if i%CSV_BATCH_SIZE == 0 {
+					e.csv.Flush()
+					i = 0
+				}
 			}
 		}
 	}

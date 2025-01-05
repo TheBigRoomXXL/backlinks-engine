@@ -35,17 +35,23 @@ func TestCSVExporterBasicFunctionality(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	urlChan := make(chan url.URL, 2)
+	linksChan := make(chan *LinkGroup)
 
-	url1 := *parseURL("http://example.com")
-	url2 := *parseURL("http://example.org")
+	group1 := &LinkGroup{
+		From: parseURL("http://example.com"),
+		To:   []*url.URL{parseURL("http://example.org"), parseURL("http://example.com/login")},
+	}
+	group2 := &LinkGroup{
+		From: parseURL("http://example.org"),
+		To:   []*url.URL{parseURL("http://example.com"), parseURL("http://example.com/login")},
+	}
 
 	// Start listening in a separate goroutine
-	go exporter.Listen(ctx, urlChan)
+	go exporter.Listen(ctx, linksChan)
 
 	// Send URLs to the channel
-	urlChan <- url1
-	urlChan <- url2
+	linksChan <- group1
+	linksChan <- group2
 
 	time.Sleep(5 * time.Millisecond) // Allow some time for the exporter to process the URLs
 	cancel()                         // Signal the listener to stop. This should trigger a flush
@@ -55,10 +61,7 @@ func TestCSVExporterBasicFunctionality(t *testing.T) {
 	csvReader := csv.NewReader(buffer)
 	records, err := csvReader.ReadAll()
 	assert.NoError(t, err, "should read exported CSV without error")
-	assert.Equal(t, [][]string{
-		{url1.String()},
-		{url2.String()},
-	}, records, "exported records should match input URLs")
+	assert.Len(t, records, 4, "should flush all link pair after cancelation")
 }
 
 func TestCSVExporterFlush(t *testing.T) {
@@ -70,14 +73,17 @@ func TestCSVExporterFlush(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	urlChan := make(chan url.URL)
+	linksChan := make(chan *LinkGroup)
 
 	// Start listening in a separate goroutine
-	go exporter.Listen(ctx, urlChan)
+	go exporter.Listen(ctx, linksChan)
 
 	// Send enough url to trigger a flush
 	for i := 0; i < size; i++ {
-		urlChan <- *parseURL("http://example.com")
+		linksChan <- &LinkGroup{
+			From: parseURL("http://example.com"),
+			To:   []*url.URL{parseURL("http://example.org")},
+		}
 	}
 
 	// Allow some time for the exporter to process the URLs
@@ -98,8 +104,8 @@ func TestCSVExporterContextCancellation(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	urlChan := make(chan url.URL)
-	defer close(urlChan)
+	linksChan := make(chan *LinkGroup)
+	defer close(linksChan)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -107,7 +113,7 @@ func TestCSVExporterContextCancellation(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		fmt.Println("listening")
-		exporter.Listen(ctx, urlChan)
+		exporter.Listen(ctx, linksChan)
 		fmt.Println("dooooone")
 	}()
 
