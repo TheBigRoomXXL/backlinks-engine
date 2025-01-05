@@ -18,9 +18,11 @@ import (
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/client"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/crawler"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/exporter"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/queue"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/robot"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/vwww"
 )
 
@@ -66,12 +68,17 @@ func cli(ctx context.Context) error {
 			return errors.New("failed to initialize setttings properly")
 		}
 
+		csvFile, err := os.OpenFile("links.csv", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0640)
+		if err != nil {
+			return fmt.Errorf("failed to open the csv export file: %w", err)
+		}
+		exporter := exporter.NewCSVExporter(csvFile)
 		fetcher := client.NewCrawlClient(
 			ctx, s.HTTP_RATE_LIMIT, s.HTTP_MAX_RETRY, s.HTTP_TIMEOUT,
 		)
 		queue := queue.NewFIFOQueue()
 		robot := robot.NewInMemoryRobotPolicy(fetcher)
-		crawler := crawler.NewCrawler(ctx, queue, fetcher, robot, s.CRAWLER_MAX_CONCURENCY)
+		crawler := crawler.NewCrawler(ctx, queue, fetcher, robot, exporter, s.CRAWLER_MAX_CONCURENCY)
 
 		seeds, err := parseSeeds(os.Args[2:])
 		if err != nil {
@@ -81,6 +88,7 @@ func cli(ctx context.Context) error {
 			crawler.AddUrl(seed)
 		}
 
+		go telemetry.MetricsReport(ctx)
 		return crawler.Run()
 	}
 
