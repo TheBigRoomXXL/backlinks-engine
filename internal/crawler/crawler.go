@@ -152,6 +152,7 @@ func (c *Crawler) crawlNextPage() error {
 		c.AddUrl(link)
 	}
 
+	telemetry.LinkPaire.Add(int64(len(linkSet)))
 	c.exportChan <- &exporter.LinkGroup{
 		From: pageUrl,
 		To:   slices.Collect(maps.Values(linkSet)),
