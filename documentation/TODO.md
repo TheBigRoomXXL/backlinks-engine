@@ -15,5 +15,5 @@
     - Separate `CRAWLER_MAX_CONCURENCY` into `HTTP_CONCURENCY_LIMIT` and `PARSER_CONCURENCY_LIMIT`. 
     - Add settings `XXX_CONCURENCY_LIMIT_MIN`, `XXX_CONCURENCY_LIMIT_MAX` and `XXX_CONCURENCY_LIMIT_FINETUNING_ENABLED`,
     - Then automate the finetuning of each limit based on metrics like `tcp io/timeout` and `cpu utilization`. This finetuning would happen every minute after the 5 first minutes with a 1% increment on current limit value and would stay in the user defined min/max.
-
+- Add support for `Retry-After` in client
 
