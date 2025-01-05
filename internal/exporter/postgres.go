@@ -3,17 +3,16 @@ package exporter
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/jackc/pgx/v5"
 )
 
-const PG_BATCH_SIZE = 128
+const PG_BATCH_SIZE = 16
 
 // We define an interface with just the pool methods we use so that we can easily mock
 type MinimalPostgres interface {
-	CopyFrom(context.Context, pgx.Identifier, []string, pgx.CopyFromSource) (int64, error)
+	SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
 }
 
 type PostgresExporter struct {
@@ -50,31 +49,40 @@ func (e *PostgresExporter) Listen(ctx context.Context, urlChan chan *LinkGroup) 
 	}
 }
 
-func (e *PostgresExporter) Insert(ctx context.Context, batch [PG_BATCH_SIZE]*LinkGroup) {
-	entries := [][]any{}
-	columns := []string{"source", "target"}
-	tableName := "links"
+func (e *PostgresExporter) Insert(ctx context.Context, groups [PG_BATCH_SIZE]*LinkGroup) {
+	query := `
+		INSERT INTO links (source, target)
+		VALUES (@source, @target)
+		ON CONFLICT DO NOTHING;
+	`
+	batch := &pgx.Batch{}
 
-	for _, group := range batch {
+	for _, group := range groups {
 		if group == nil {
 			// When we do a partial insert part of the values are null.
 			continue
 		}
 		source := group.From.String()
 		for _, target := range group.To {
-			entries = append(entries, []any{source, target.String()})
+			args := pgx.NamedArgs{
+				"source": source,
+				"target": target.String(),
+			}
+			batch.Queue(query, args)
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	_, err := e.pg.CopyFrom(
-		ctx,
-		pgx.Identifier{tableName},
-		columns,
-		pgx.CopyFromRows(entries),
-	)
-	if err != nil {
-		telemetry.ErrorChan <- fmt.Errorf("error copying into %s table: %w", tableName, err)
+	results := e.pg.SendBatch(ctx, batch)
+	defer results.Close()
+
+	for _, group := range groups {
+		if group == nil {
+			continue
+		}
+
+		_, err := results.Exec()
+		if err != nil {
+			telemetry.ErrorChan <- fmt.Errorf("unable to insert row in links: %w", err)
+		}
 	}
 }

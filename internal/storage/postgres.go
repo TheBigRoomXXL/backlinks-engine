@@ -6,7 +6,9 @@ package storage
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -31,24 +33,29 @@ func initDatabase() {
 	go func() {
 		<-ctx.Done()
 		if pool != nil {
+			slog.Debug("closing postgres pool")
 			pool.Close()
 		}
 	}()
 
 	// Create connection pool
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, postgresURI)
+	var err error
+	pool, err = pgxpool.New(ctx, postgresURI)
 	if err != nil {
 		initError = fmt.Errorf("failed to create connection pool: %w", err)
 		return
 	}
+	slog.Debug("postgres pool aquired")
 
 	// Test connection pool
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
 	err = pool.Ping(ctx)
 	if err != nil {
 		initError = fmt.Errorf("ping failed after pool creation: %w", err)
 		return
 	}
+	slog.Debug("pool pinged successfully")
 
 	// Ensure Schema is initialized
 	_, err = pool.Exec(ctx, `

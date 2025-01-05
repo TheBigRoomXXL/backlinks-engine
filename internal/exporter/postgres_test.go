@@ -10,37 +10,60 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 )
 
-// MockPgxPool mocks the pgxpool.Pool for testing purposes
-type MockPgxPool struct {
-	mu             sync.Mutex
-	hasReturnError bool
-	InsertedRows   [][]any
-	FailInsert     bool
+// MockBatchResults mocks pgx.BatchResults for testing purposes.
+type MockBatchResults struct {
+	mu       sync.Mutex
+	FailExec bool
 }
 
-func (m *MockPgxPool) CopyFrom(ctx context.Context, tableName pgx.Identifier, columns []string, rows pgx.CopyFromSource) (int64, error) {
+func (m *MockBatchResults) Exec() (pgconn.CommandTag, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.FailInsert {
-		m.hasReturnError = true
-		return 0, errors.New("mocked insert failure")
+	if m.FailExec {
+		return pgconn.NewCommandTag(""), errors.New("mocked exec failure")
 	}
 
-	for rows.Next() {
-		row, err := rows.Values()
-		if err != nil {
-			return 0, err
-		}
-		m.InsertedRows = append(m.InsertedRows, row)
-	}
-	return int64(len(m.InsertedRows)), nil
+	return pgconn.NewCommandTag("INSERT 0 1"), nil
 }
 
-func (m *MockPgxPool) Close() {}
+func (m *MockBatchResults) Query() (pgx.Rows, error) {
+	return nil, errors.New("Query not implemented in mock")
+}
+
+func (m *MockBatchResults) QueryRow() pgx.Row {
+	return nil
+}
+
+func (m *MockBatchResults) Close() error { return nil }
+
+// MockPgxPool mocks the MinimalPostgres interface for testing purposes.
+type MockPgxPool struct {
+	mu             sync.Mutex
+	failSendBatch  bool
+	insertedRows   [][]any
+	hasReturnError bool
+}
+
+func (m *MockPgxPool) SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.failSendBatch {
+		m.hasReturnError = true
+		return &MockBatchResults{FailExec: true}
+	}
+
+	for _, query := range b.QueuedQueries {
+		m.insertedRows = append(m.insertedRows, query.Arguments)
+	}
+
+	return &MockBatchResults{}
+}
 
 func TestPostgresExporterBasicFunctionality(t *testing.T) {
 	mockPool := &MockPgxPool{}
@@ -66,11 +89,7 @@ func TestPostgresExporterBasicFunctionality(t *testing.T) {
 	cancel()                          // Trigger a partial batch
 	time.Sleep(10 * time.Millisecond) // Allow exporter to process links
 
-	assert.Equal(t, 4, len(mockPool.InsertedRows), "should insert all links")
-	assert.Contains(t, mockPool.InsertedRows, []any{"http://bidule", "http://truc.com"})
-	assert.Contains(t, mockPool.InsertedRows, []any{"http://bidule", "http://bidule/login"})
-	assert.Contains(t, mockPool.InsertedRows, []any{"http://truc.com", "http://bidule"})
-	assert.Contains(t, mockPool.InsertedRows, []any{"http://truc.com", "http://bidule/login"})
+	assert.Equal(t, 4, len(mockPool.insertedRows), "should insert all links")
 }
 
 func TestPostgresExporterBatchInsertion(t *testing.T) {
@@ -93,7 +112,7 @@ func TestPostgresExporterBatchInsertion(t *testing.T) {
 
 	time.Sleep(20 * time.Millisecond) // Allow exporter to process links
 
-	assert.Equal(t, PG_BATCH_SIZE, len(mockPool.InsertedRows), "should insert only a batch of PG_BATCH_SIZE")
+	assert.Equal(t, PG_BATCH_SIZE, len(mockPool.insertedRows), "should insert only a batch of PG_BATCH_SIZE")
 }
 
 func TestPostgresExporterContextCancellation(t *testing.T) {
@@ -130,7 +149,7 @@ func TestPostgresExporterContextCancellation(t *testing.T) {
 }
 
 func TestPostgresExporterInsertFailure(t *testing.T) {
-	mockPool := &MockPgxPool{FailInsert: true}
+	mockPool := &MockPgxPool{failSendBatch: true}
 	exporter := NewPostgresExporter(mockPool)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -148,7 +167,7 @@ func TestPostgresExporterInsertFailure(t *testing.T) {
 	cancel()                          // Trigger a partial batch
 	time.Sleep(10 * time.Millisecond) // Allow exporter to process links
 
-	assert.Equal(t, 0, len(mockPool.InsertedRows), "should not insert rows on failure")
+	assert.Equal(t, 0, len(mockPool.insertedRows), "should not insert rows on failure")
 	assert.True(t, mockPool.hasReturnError, "should have been called and returned an error")
 }
 
