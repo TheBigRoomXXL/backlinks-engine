@@ -9,7 +9,7 @@ import (
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 )
 
-var CSV_BATCH_SIZE = 128
+const CSV_BATCH_SIZE = 128
 
 type CSVExporter struct {
 	stream io.WriteCloser
@@ -38,7 +38,7 @@ func (e *CSVExporter) Listen(ctx context.Context, urlChan chan *LinkGroup) {
 				}
 				// Flush buffer periodically
 				i++
-				if i%CSV_BATCH_SIZE == 0 {
+				if i == CSV_BATCH_SIZE {
 					e.csv.Flush()
 					i = 0
 				}

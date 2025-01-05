@@ -52,18 +52,19 @@ func initDatabase() {
 
 	// Ensure Schema is initialized
 	_, err = pool.Exec(ctx, `
-			CREATE TABLE IF NOT EXISTS domains (
-				hostname_reversed	text PRIMARY KEY,
+			CREATE TABLE IF NOT EXISTS host (
+				host_reversed	text PRIMARY KEY,
 				robot 				text NOT NULL
 			);
 
 			CREATE TABLE IF NOT EXISTS pages (
-				id bigserial		PRIMARY KEY,
 				scheme				text NOT NULL,
-				hostname_reversed	text NOT NULL,
+				host_reversed	text NOT NULL,
 				path 				text NOT NULL,
 				latest_visited 		timestamp,
-				latest_status 		smallint
+				latest_status 		smallint,
+
+				PRIMARY KEY(host_reversed, path)
 			);
 
 			CREATE TABLE IF NOT EXISTS links (
