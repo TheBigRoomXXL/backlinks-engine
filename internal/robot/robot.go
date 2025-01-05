@@ -3,7 +3,6 @@ package robot
 import (
 	"fmt"
 	"io"
-	"log/slog"
 	"net/url"
 	"strings"
 	"sync"
@@ -39,7 +38,6 @@ func (r *InMemoryRobotPolicy) IsAllowed(url *url.URL) bool {
 }
 
 func (r *InMemoryRobotPolicy) getRobotPolicy(hostname string) string {
-	slog.Debug(fmt.Sprintf("getting policy for %s\n", hostname))
 	resp, err := r.client.Get("http://" + hostname + "/robots.txt")
 	if err != nil {
 		telemetry.ErrorChan <- fmt.Errorf("failed to get robot.txt for %s: %w", hostname, err)

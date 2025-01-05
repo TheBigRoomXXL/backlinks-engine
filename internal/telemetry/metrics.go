@@ -30,9 +30,9 @@ func init() {
 
 func MetricsReport(ctx context.Context) {
 	start := time.Now()
-	fmt.Println("┌───────────────┬───────────────┬───────────────┬───────────────┬───────────────┐")
-	fmt.Println("│     Time      │   processed   │    errors     │  tcp timeout  │  queue size   │")
-	fmt.Println("├───────────────┼───────────────┼───────────────┼───────────────┼───────────────┤")
+	fmt.Println("┌───────────────┬───────────────┬───────────────┬───────────────┬───────────────┬───────────────┐")
+	fmt.Println("│     Time      │   processed   │    errors     │  tcp timeout  │  queue size   │  link pairs   │")
+	fmt.Println("├───────────────┼───────────────┼───────────────┼───────────────┼───────────────┼───────────────┤")
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -40,13 +40,13 @@ func MetricsReport(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("\r└───────────────┴───────────────┴───────────────┴───────────────┴───────────────┘")
+			fmt.Println("\r└───────────────┴───────────────┴───────────────┴───────────────┴───────────────┴───────────────┘")
 			return
 		case <-ticker.C:
 			uptime := time.Since(start).Round(time.Second)
 			fmt.Printf(
-				"\r│ %13s │ %13d │ %13d │ %13d │ %13d │ %13d │ %13d │",
-				uptime, ProcessedURL.Value(), Errors.Value(), TCPTimeout.Value(), QueueSize.Value(), LinkPaire.Value(), QueueSize.Value(),
+				"\r│ %13s │ %13d │ %13d │ %13d │ %13d │ %13d │",
+				uptime, ProcessedURL.Value(), Errors.Value(), TCPTimeout.Value(), QueueSize.Value(), LinkPaire.Value(),
 			)
 			if int(uptime.Seconds())%30 == 0 {
 				fmt.Print("\n")
