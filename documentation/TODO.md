@@ -1,4 +1,5 @@
 - acutally save the collected data instead of running everything in memery.
+- FIX the robot.txt lock
 - add user agent to settings
 - use sitemap from robot.txt to add seeds
 - extract like from other things than \<a\>
@@ -16,4 +17,5 @@
     - Add settings `XXX_CONCURENCY_LIMIT_MIN`, `XXX_CONCURENCY_LIMIT_MAX` and `XXX_CONCURENCY_LIMIT_FINETUNING_ENABLED`,
     - Then automate the finetuning of each limit based on metrics like `tcp io/timeout` and `cpu utilization`. This finetuning would happen every minute after the 5 first minutes with a 1% increment on current limit value and would stay in the user defined min/max.
 - Add support for `Retry-After` in client
-
+- Try to do static allocation of memory and disk on startup based on expected limits
+- Profiling guided build
