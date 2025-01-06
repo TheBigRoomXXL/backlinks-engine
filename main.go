@@ -17,12 +17,10 @@ import (
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/client"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/controller"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/crawler"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/exporter"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/queue"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/robot"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/settings"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/storage"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/vwww"
 )
@@ -78,24 +76,19 @@ func cli(ctx context.Context) error {
 			s.DB_NAME,
 			s.DB_OPTIONS,
 		)
-
-		postgres, err := storage.NewPostgres(ctx, PostgresURI)
+		controller, err := controller.NewController(ctx, PostgresURI)
 		if err != nil {
 			return fmt.Errorf("failed init postgres connection pool: %w", err)
 		}
-		queue := queue.NewFIFOQueue()
-		exporter := exporter.NewPostgresExporter(postgres)
 		fetcher := client.NewCrawlClient(ctx, s.HTTP_RATE_LIMIT, s.HTTP_MAX_RETRY, s.HTTP_TIMEOUT)
 		robot := robot.NewInMemoryRobotPolicy(fetcher)
-		crawler := crawler.NewCrawler(ctx, queue, fetcher, robot, exporter, s.CRAWLER_MAX_CONCURENCY)
+		crawler := crawler.NewCrawler(ctx, controller, fetcher, robot, s.CRAWLER_MAX_CONCURENCY)
 
 		seeds, err := parseSeeds(os.Args[2:])
 		if err != nil {
 			return fmt.Errorf("fail to parse argument: %w", err)
 		}
-		for _, seed := range seeds {
-			crawler.AddUrl(seed)
-		}
+		crawler.Seed(seeds)
 
 		go telemetry.MetricsReport(ctx)
 		return crawler.Run()

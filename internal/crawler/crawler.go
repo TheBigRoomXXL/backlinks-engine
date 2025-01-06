@@ -14,8 +14,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	clientpkg "github.com/TheBigRoomXXL/backlinks-engine/internal/client"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
-	exportpkg "github.com/TheBigRoomXXL/backlinks-engine/internal/exporter"
-	queuepkg "github.com/TheBigRoomXXL/backlinks-engine/internal/queue"
+	controllerpkg "github.com/TheBigRoomXXL/backlinks-engine/internal/controller"
 	robotpkg "github.com/TheBigRoomXXL/backlinks-engine/internal/robot"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"golang.org/x/sync/errgroup"
@@ -23,43 +22,35 @@ import (
 
 type Crawler struct {
 	ctx             context.Context
-	queue           queuepkg.Queue
+	controller      *controllerpkg.Controller
 	fetcher         clientpkg.Fetcher
 	robot           robotpkg.RobotPolicy
-	exporter        exportpkg.Exporter
-	exportChan      chan *exportpkg.LinkGroup
 	group           *errgroup.Group
 	concurencyLimit int
 }
 
 func NewCrawler(
 	ctx context.Context,
-	queue queuepkg.Queue,
+	controller *controllerpkg.Controller,
 	fetcher clientpkg.Fetcher,
 	robot robotpkg.RobotPolicy,
-	exporter exportpkg.Exporter,
 	max_concurency int,
 ) *Crawler {
 	group, ctx := errgroup.WithContext(ctx)
 	group.SetLimit(max_concurency)
 
-	exportChan := make(chan *exportpkg.LinkGroup)
-	go exporter.Listen(ctx, exportChan)
-
 	return &Crawler{
 		ctx:             ctx,
+		controller:      controller,
 		group:           group,
-		queue:           queue,
 		fetcher:         fetcher,
 		robot:           robot,
-		exporter:        exporter,
-		exportChan:      exportChan,
 		concurencyLimit: max_concurency,
 	}
 }
 
-func (c *Crawler) AddUrl(url *url.URL) error {
-	return c.queue.Add(url)
+func (c *Crawler) Seed(seeds []*url.URL) {
+	c.controller.Seed(seeds)
 }
 
 func (c *Crawler) Run() error {
@@ -85,13 +76,7 @@ func (c *Crawler) Run() error {
 }
 
 func (c *Crawler) crawlNextPage() error {
-	pageUrl, err := c.queue.Next()
-	if err != nil {
-		return fmt.Errorf("error getting next element in queue: %w", err)
-	}
-	if pageUrl == nil {
-		return nil
-	}
+	pageUrl := c.controller.Next()
 	defer telemetry.ProcessedURL.Add(1)
 
 	if !c.robot.IsAllowed(pageUrl) {
@@ -141,16 +126,12 @@ func (c *Crawler) crawlNextPage() error {
 		linkSet[link.String()] = link
 	}
 
-	for _, link := range linkSet {
-		c.AddUrl(link)
-	}
-
-	telemetry.LinkPaire.Add(int64(len(linkSet)))
-	c.exportChan <- &exportpkg.LinkGroup{
+	c.controller.Add(&commons.LinkGroup{
 		From: pageUrl,
 		To:   slices.Collect(maps.Values(linkSet)),
-	}
+	})
 
+	telemetry.LinkPaire.Add(int64(len(linkSet)))
 	return nil
 }
 

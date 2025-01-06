@@ -9,6 +9,15 @@ import (
 	"time"
 )
 
+type LinkGroup struct {
+	From *url.URL
+	To   []*url.URL
+}
+type Link struct {
+	From *url.URL
+	To   *url.URL
+}
+
 func ReverseHostname(hostname string) string {
 	labels := strings.Split(hostname, ".")
 	slices.Reverse(labels)
