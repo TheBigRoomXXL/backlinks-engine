@@ -18,21 +18,33 @@ type RobotPolicy interface {
 
 type InMemoryRobotPolicy struct {
 	client        client.Fetcher
+	locks         *sync.Map
 	robotPolicies *sync.Map
 }
 
 func NewInMemoryRobotPolicy(fetcher client.Fetcher) *InMemoryRobotPolicy {
 	return &InMemoryRobotPolicy{
 		client:        fetcher,
+		locks:         &sync.Map{},
 		robotPolicies: &sync.Map{},
 	}
 }
 
 func (r *InMemoryRobotPolicy) IsAllowed(url *url.URL) bool {
-	robotTxt, ok := r.robotPolicies.Load(url.Hostname())
+	// This double locking kind of terrible but I could not find a better way to escure
+	// strictly one execution of getRobotPolicy (to use LoadOrStore you must have the value
+	// before hand but what i want is actually the fetch the value only if needed)
+	hostname := url.Hostname()
+	anymu, _ := r.locks.LoadOrStore(hostname, &sync.Mutex{})
+	mu := anymu.(*sync.Mutex)
+	mu.Lock()
+	robotTxt, ok := r.robotPolicies.Load(hostname)
 	if !ok {
-		robotTxt, _ = r.robotPolicies.LoadOrStore(url.Hostname(), r.getRobotPolicy(url.Hostname()))
+		robotTxt = r.getRobotPolicy(hostname)
+		r.robotPolicies.Store(hostname, robotTxt)
 	}
+	mu.Unlock()
+
 	robotTxtStr := robotTxt.(string)
 	return grobotstxt.AgentAllowed(robotTxtStr, "BacklinksBot", url.String())
 }
