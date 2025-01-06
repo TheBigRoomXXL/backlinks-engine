@@ -3,6 +3,7 @@ package exporter
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/jackc/pgx/v5"
@@ -71,6 +72,9 @@ func (e *PostgresExporter) Insert(ctx context.Context, groups [PG_BATCH_SIZE]*Li
 			batch.Queue(query, args)
 		}
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
+	defer cancel()
 
 	results := e.pg.SendBatch(ctx, batch)
 	defer results.Close()
