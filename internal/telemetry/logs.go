@@ -36,7 +36,7 @@ func (h *HandlerWithMetrics) Handle(ctx context.Context, record slog.Record) err
 	if record.Level == slog.LevelError {
 		Errors.Add(1)
 	} else if record.Level == slog.LevelWarn {
-
+		Warnings.Add(1)
 	}
 	return h.handler.Handle(ctx, record)
 }
