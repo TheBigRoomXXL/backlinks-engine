@@ -131,7 +131,7 @@ func (c *Crawler) crawlNextPage() error {
 		To:   slices.Collect(maps.Values(linkSet)),
 	})
 
-	telemetry.LinkPaire.Add(int64(len(linkSet)))
+	telemetry.Links.Add(int64(len(linkSet)))
 	return nil
 }
 

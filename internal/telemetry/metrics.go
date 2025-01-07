@@ -15,7 +15,7 @@ var (
 	TCPTimeout      *expvar.Int
 	RobotAllowed    *expvar.Int
 	RobotDisallowed *expvar.Int
-	LinkPaire       *expvar.Int
+	Links           *expvar.Int
 )
 
 func init() {
@@ -25,7 +25,7 @@ func init() {
 	QueueSize = expvar.NewInt("QueueSize")
 	RobotAllowed = expvar.NewInt("RobotAllowed")
 	RobotDisallowed = expvar.NewInt("RobotDisallowed")
-	LinkPaire = expvar.NewInt("LinkPaire")
+	Links = expvar.NewInt("Links")
 }
 
 func MetricsReport(ctx context.Context) {
@@ -46,7 +46,12 @@ func MetricsReport(ctx context.Context) {
 			uptime := time.Since(start).Round(time.Second)
 			fmt.Printf(
 				"\r│ %13s │ %13d │ %13d │ %13d │ %13d │ %13d │",
-				uptime, ProcessedURL.Value(), Errors.Value(), TCPTimeout.Value(), QueueSize.Value(), LinkPaire.Value(),
+				uptime,
+				ProcessedURL.Value(),
+				Errors.Value(),
+				TCPTimeout.Value(),
+				QueueSize.Value(),
+				Links.Value(),
 			)
 			if int(uptime.Seconds())%30 == 0 {
 				fmt.Print("\n")
