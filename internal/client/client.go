@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -29,13 +30,12 @@ type Fetcher interface {
 // NOTE: HEAD and GET requests have different request limiters otherwise all GET requests
 // will be stopped by HEAD requests (wich are queued first) instead of working in tandem.
 type CrawlClient struct {
-	ctx              context.Context
-	client           *http.Client
-	headRatelimiters map[string]*rate.Limiter
-	getRatelimiters  map[string]*rate.Limiter
-	rateLimit        rate.Limit
-	retryLimit       int
-	lock             *sync.RWMutex
+	ctx          context.Context
+	client       *http.Client
+	rateLimiters *sync.Map
+	rateLimit    rate.Limit
+	retryLimit   int
+	lock         *sync.RWMutex
 }
 
 func NewCrawlClient(
@@ -58,20 +58,23 @@ func NewCrawlClient(
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 	c := &CrawlClient{
-		ctx:              ctx,
-		client:           &http.Client{Transport: transport, Timeout: timeout},
-		rateLimit:        rateLimiter,
-		headRatelimiters: make(map[string]*rate.Limiter, 1024),
-		getRatelimiters:  make(map[string]*rate.Limiter, 1024),
-		retryLimit:       retryLimit,
-		lock:             &sync.RWMutex{},
+		ctx:          ctx,
+		client:       &http.Client{Transport: transport, Timeout: timeout},
+		rateLimiters: &sync.Map{},
+		rateLimit:    rateLimiter,
+		retryLimit:   retryLimit,
+		lock:         &sync.RWMutex{},
 	}
 	return c
 }
 
 func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
-	rateLimiter := c.getRateLimiter(req.Method, req.Host)
+	v, _ := c.rateLimiters.LoadOrStore(req.Method+req.Host, rate.NewLimiter(c.rateLimit, 1))
+	rateLimiter := v.(*rate.Limiter)
+
+	t0 := time.Now()
 	err := rateLimiter.Wait(c.ctx) // This is a blocking call. Honors the rate limit
+	slog.Info(fmt.Sprintf("waited %s for a limit of %0.2f on %s %s ", time.Since(t0), rateLimiter.Limit(), req.Method, req.Host))
 	if err != nil {
 		return nil, fmt.Errorf("error while waiting for rate limit: %w", err)
 	}
@@ -129,35 +132,6 @@ func (c *CrawlClient) Head(url string) (resp *http.Response, err error) {
 	}
 	req.Header.Set("User-Agent", "BacklinksBot")
 	return c.Do(req)
-}
-
-// Return the matching ratelimiter in a concurency-safe way.
-// Return nil if bad method is given. Method must be uppercase.
-func (c *CrawlClient) getRateLimiter(method string, hostname string) *rate.Limiter {
-	var rateLimiter *rate.Limiter
-	var ok bool
-	c.lock.RLock()
-	switch method {
-	case "GET":
-		rateLimiter, ok = c.getRatelimiters[hostname]
-	case "HEAD":
-		rateLimiter, ok = c.headRatelimiters[hostname]
-	default:
-		return nil
-	}
-	c.lock.RUnlock()
-	if !ok {
-		c.lock.Lock()
-		if method == "HEAD" {
-			rateLimiter = rate.NewLimiter(c.rateLimit, 1)
-			c.headRatelimiters[hostname] = rateLimiter
-		} else {
-			rateLimiter = rate.NewLimiter(c.rateLimit, 1)
-			c.getRatelimiters[hostname] = rateLimiter
-		}
-		c.lock.Unlock()
-	}
-	return rateLimiter
 }
 
 // Return the duration for next retry based on an exponential of the rate limit

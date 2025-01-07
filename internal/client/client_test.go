@@ -278,7 +278,11 @@ func TestCrawlDynamicRateLimiting(t *testing.T) {
 
 	// Test
 	client.Get("http://test.com/truc")
-	result := client.getRatelimiters["test.com"].Limit()
+	v, ok := client.rateLimiters.Load("GETtest.com")
+	if !ok {
+		t.Fatal("rate limit was not initialized")
+	}
+	result := v.(*rate.Limiter).Limit()
 	if result != 5.0 {
 		t.Fatalf("bad rate limit: want 50req/s; got %.2freq/s ", result)
 	}

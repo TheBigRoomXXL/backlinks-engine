@@ -97,19 +97,18 @@ func initSettings() {
 	var httpRateLimit rate.Limit
 	httpRateLimitStr, ok := os.LookupEnv("HTTP_RATE_LIMIT")
 	if !ok {
-		httpRateLimit = rate.Limit(rate.Every(5 * time.Second))
+		httpRateLimit = rate.Limit(rate.Every(5000 * time.Millisecond))
 	} else {
 		i, err := strconv.Atoi(httpRateLimitStr)
 		if err != nil {
 			initOk = false
-			slog.Warn("failed to parse HTTP_RATE_LIMIT as an int (defaulting to 5): " + err.Error())
-			i = 5
+			slog.Warn("failed to parse HTTP_RATE_LIMIT as an int (defaulting to 5000ms): " + err.Error())
+			i = 5000
 		}
 		if i == 0 {
-			initOk = false
 			slog.Warn("HTTP rate limiting is disable. Please only do so in local tests.")
 		}
-		httpRateLimit = rate.Limit(rate.Every(time.Duration(i * int(time.Second))))
+		httpRateLimit = rate.Limit(rate.Every(time.Duration(i * int(time.Millisecond))))
 	}
 
 	var httpMaxRetry int
