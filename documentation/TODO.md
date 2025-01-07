@@ -19,3 +19,4 @@
 - Add support for `Retry-After` in client
 - Try to do static allocation of memory and disk on startup based on expected limits
 - Profiling guided build
+- Add persistance to robot.txt
