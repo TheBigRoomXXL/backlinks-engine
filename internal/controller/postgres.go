@@ -70,7 +70,7 @@ func initDatabase() {
 			);
 
 			CREATE TABLE IF NOT EXISTS pages (
-			 	id 				BIGSERIAL,
+			 	id 				uuid DEFAULT gen_random_uuid(),
 				scheme			text NOT NULL,
 				host_reversed	text NOT NULL,
 				path 			text NOT NULL,
@@ -165,10 +165,11 @@ func selectNextPages(ctx context.Context, db *pgxpool.Pool) (pgx.Rows, error) {
 		FROM (
 			SELECT id
 			FROM pages
-			ORDER BY latest_visit NULLS FIRST
+			WHERE latest_visit IS NULL
+			ORDER BY id
 			LIMIT 1024
 		) subquery
-		FOR UPDATE SKIP LOCKED
+
 	)
 	UPDATE pages
 	SET latest_visit = NOW()
