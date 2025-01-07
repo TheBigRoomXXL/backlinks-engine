@@ -20,3 +20,6 @@
 - Try to do static allocation of memory and disk on startup based on expected limits
 - Profiling guided build
 - Add persistance to robot.txt
+- Rename controller.Add to controller.AddSuccesfull and add controller.AddFailed
+- redo the GetNextPage query. Some king of weight based query ? 
+- Decide waht information to keep for each page based on the cache system and the new GetNextPage query.
