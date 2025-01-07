@@ -159,21 +159,17 @@ func updatePages(ctx context.Context, db *pgxpool.Pool, pages []*url.URL) {
 
 func selectNextPages(ctx context.Context, db *pgxpool.Pool) (pgx.Rows, error) {
 	query := `
-	WITH next_pages AS (
-		SELECT id
-		FROM (
-			SELECT id
+		WITH next_pages AS (
+			SELECT DISTINCT ON (host_reversed) id
 			FROM pages
 			WHERE latest_visit IS NULL
-			ORDER BY id
-			LIMIT 1024
-		) subquery
-
-	)
-	UPDATE pages
-	SET latest_visit = NOW()
-	WHERE id IN (SELECT id FROM next_pages)
-	RETURNING scheme, host_reversed, path;
+			LIMIT 2048
+		)
+		UPDATE pages
+		SET latest_visit = NOW()
+		FROM next_pages
+		WHERE pages.id = next_pages.id
+		RETURNING scheme, host_reversed, path;
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
