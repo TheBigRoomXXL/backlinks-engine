@@ -3,11 +3,11 @@ package controller
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"time"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -57,7 +57,7 @@ func (c *Controller) nextProducer() {
 	for {
 		rows, err := selectNextPages(c.ctx, c.pg)
 		if err != nil {
-			telemetry.ErrorChan <- fmt.Errorf("error in planner: unable to get next pages: %w", err)
+			slog.Error(fmt.Sprintf("error in planner: unable to get next pages: %s", err))
 			continue
 		}
 		defer rows.Close()
@@ -69,7 +69,7 @@ func (c *Controller) nextProducer() {
 			var path string
 			err := rows.Scan(&scheme, &hostReversed, &path)
 			if err != nil {
-				telemetry.ErrorChan <- fmt.Errorf("error in planner: unable to scan row: %w", err)
+				slog.Error(fmt.Sprintf("error in planner: unable to scan row: %s", err))
 				continue
 			}
 			host := commons.ReverseHostname(hostReversed)

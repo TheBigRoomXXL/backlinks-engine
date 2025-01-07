@@ -89,35 +89,32 @@ func (c *Crawler) crawlNextPage() error {
 	pageUrlStr := pageUrl.String()
 	resp, err := c.fetcher.Head(pageUrlStr)
 	if err != nil {
-		slog.Debug(fmt.Sprintf("HEAD %s failed: %s\n", pageUrlStr, err))
-		telemetry.ErrorChan <- err
+		slog.Error(err.Error())
 		return nil
 	}
 	resp.Body.Close()
 
-	if !isResponsesCrawlable(resp) {
-		slog.Debug(fmt.Sprintf("HEAD %s response is not crawlable\n", pageUrlStr))
+	if err := isResponsesCrawlable(resp); err != nil {
+		slog.Warn(fmt.Sprintf("response from HEAD %s is not crawlable: %s", pageUrlStr, err))
 		return nil
 	}
 
 	resp, err = c.fetcher.Get(pageUrlStr)
 	if err != nil {
-		slog.Debug(fmt.Sprintf("Get %s failed: %s\n", pageUrlStr, err))
-		telemetry.ErrorChan <- err
+		slog.Error(err.Error())
 		return nil
 	}
 	defer resp.Body.Close()
 
 	// We double check in case the HEAD response was not representative
-	if !isResponsesCrawlable(resp) {
-		slog.Debug(fmt.Sprintf("GET %s response is not crawlable\n", pageUrlStr))
+	if err := isResponsesCrawlable(resp); err != nil {
+		slog.Warn(fmt.Sprintf("response from GET %s is not crawlable: %s", pageUrlStr, err))
 		return nil
 	}
 
 	links, err := extractLinks(resp)
 	if err != nil {
-		slog.Debug(fmt.Sprintf("failed to extract links from %s : %s\n", pageUrlStr, err))
-		telemetry.ErrorChan <- err
+		slog.Error(err.Error())
 		return nil
 	}
 
@@ -135,31 +132,28 @@ func (c *Crawler) crawlNextPage() error {
 	return nil
 }
 
-func isResponsesCrawlable(resp *http.Response) bool {
+func isResponsesCrawlable(resp *http.Response) error {
 	if resp.StatusCode < 200 || resp.StatusCode > 299 || resp.StatusCode == 204 {
-		slog.Debug(fmt.Sprintf("resp %s has bad status: %d\n", resp.Request.URL, resp.StatusCode))
-		return false
+		return fmt.Errorf("resp %s has bad status %d", resp.Request.URL, resp.StatusCode)
 	}
 
 	contentType := resp.Header.Get("content-type")
 	if !strings.Contains(contentType, "html") {
-		slog.Debug(fmt.Sprintf("resp %s has bad content-type: %s\n", resp.Request.URL, resp.Header.Get("content-type")))
-		return false
+		return fmt.Errorf("resp %s has bad content-type %s", resp.Request.URL, resp.Header.Get("content-type"))
 	}
 
 	robotsTags := resp.Header.Get("x-robots-tag")
 	if strings.Contains(robotsTags, "nofollow") || strings.Contains(robotsTags, "noindex") {
-		slog.Debug(fmt.Sprintf("resp %s has bad robotag: %s\n", resp.Request.URL, robotsTags))
-		return false
+		return fmt.Errorf("resp %s has robotag %s", resp.Request.URL, robotsTags)
 	}
-	return true
+	return nil
 }
 
 func extractLinks(resp *http.Response) ([]*url.URL, error) {
 	links := make([]*url.URL, 0)
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse the HTML document: %w", err)
+		return nil, fmt.Errorf("failed to parse the HTML document: %s", err)
 	}
 
 	doc.Find("a[href]").Each(func(i int, s *goquery.Selection) {

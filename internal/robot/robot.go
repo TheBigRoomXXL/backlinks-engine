@@ -3,14 +3,16 @@ package robot
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"strings"
 	"sync"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/client"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/jimsmart/grobotstxt"
 )
+
+const norobot = "#failed-to-get-robot.txt"
 
 type RobotPolicy interface {
 	IsAllowed(*url.URL) bool
@@ -52,27 +54,27 @@ func (r *InMemoryRobotPolicy) IsAllowed(url *url.URL) bool {
 func (r *InMemoryRobotPolicy) getRobotPolicy(hostname string) string {
 	resp, err := r.client.Get("http://" + hostname + "/robots.txt")
 	if err != nil {
-		telemetry.ErrorChan <- fmt.Errorf("failed to get robot.txt for %s: %w", hostname, err)
-		return "#failed-to-get-robot.txt"
+		slog.Warn(fmt.Sprintf("failed to get robot.txt for %s: %s", hostname, err))
+		return norobot
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		telemetry.ErrorChan <- fmt.Errorf("failed to get robot.txt for %s: response with status %d", hostname, resp.StatusCode)
-		return "#failed-to-get-robot.txt"
+		slog.Warn(fmt.Sprintf("failed to get robot.txt for %s: response with status %d", hostname, resp.StatusCode))
+		return norobot
 	}
 
 	contentType := strings.ToLower(resp.Header.Get("content-Type"))
 	if !strings.Contains(contentType, "text/plain") {
-		telemetry.ErrorChan <- fmt.Errorf("failed to get robot.txt for %s: response with content-type %s", hostname, contentType)
-		return "#failed-to-get-robot.txt"
+		slog.Warn(fmt.Sprintf("failed to get robot.txt for %s: response with content-type %s", hostname, contentType))
+		return norobot
 	}
 
 	data := make([]byte, 512*1024)
 	n, err := resp.Body.Read(data)
 	if err != nil && err != io.EOF {
-		telemetry.ErrorChan <- fmt.Errorf("failed to get robot.txt for %s: failed to read body: %w", hostname, err)
-		return "#failed-to-get-robot.txt"
+		slog.Warn(fmt.Sprintf("failed to get robot.txt for %s: failed to read body: %s", hostname, err))
+		return norobot
 	}
 	return string(data[:n])
 }

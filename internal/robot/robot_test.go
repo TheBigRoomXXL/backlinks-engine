@@ -11,8 +11,6 @@ import (
 	"github.com/TheBigRoomXXL/backlinks-engine/internal"
 )
 
-var norobot = "#failed-to-get-robot.txt"
-
 func TestRobotGetPolicySuccess(t *testing.T) {
 	// Setup
 	policy := `

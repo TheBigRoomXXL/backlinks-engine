@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -119,7 +118,7 @@ func insertPages(ctx context.Context, db *pgxpool.Pool, pages []*url.URL) {
 
 	_, err := db.Exec(ctx, stmt, args...)
 	if err != nil {
-		telemetry.ErrorChan <- fmt.Errorf("unable to insert rows: %w", err)
+		slog.Error(fmt.Sprintf("unable to insert pages: %s", err))
 	}
 }
 
@@ -150,7 +149,7 @@ func insertLinks(ctx context.Context, db *pgxpool.Pool, links []commons.Link) {
 
 	_, err := db.Exec(ctx, stmt, args...)
 	if err != nil {
-		telemetry.ErrorChan <- fmt.Errorf("unable to insert links: %w", err)
+		slog.Error(fmt.Sprintf("unable to insert links: %s", err))
 	}
 }
 

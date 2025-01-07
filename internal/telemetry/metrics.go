@@ -11,6 +11,7 @@ import (
 var (
 	ProcessedURL    *expvar.Int
 	Errors          *expvar.Int
+	Warnings        *expvar.Int
 	QueueSize       *expvar.Int
 	TCPTimeout      *expvar.Int
 	RobotAllowed    *expvar.Int
@@ -21,6 +22,7 @@ var (
 func init() {
 	ProcessedURL = expvar.NewInt("PocessedURL")
 	Errors = expvar.NewInt("Errors")
+	Warnings = expvar.NewInt("Warnings")
 	TCPTimeout = expvar.NewInt("TCPTimeout")
 	QueueSize = expvar.NewInt("QueueSize")
 	RobotAllowed = expvar.NewInt("RobotAllowed")
