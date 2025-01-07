@@ -40,6 +40,16 @@ func MetricsReport(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			uptime := time.Since(start).Round(time.Second)
+			fmt.Printf(
+				"\n│ %13s │ %13d │ %13d │ %13d │ %13d │ %13d │\n",
+				uptime,
+				ProcessedURL.Value(),
+				Errors.Value(),
+				TCPTimeout.Value(),
+				QueueSize.Value(),
+				Links.Value(),
+			)
 			fmt.Println("\r└───────────────┴───────────────┴───────────────┴───────────────┴───────────────┴───────────────┘")
 			return
 		case <-ticker.C:
