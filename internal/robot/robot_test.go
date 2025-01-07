@@ -5,7 +5,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
-	"sync"
 	"testing"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal"
@@ -134,10 +133,7 @@ func TestRobotIsAllowed(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			// Setup
-			robot := InMemoryRobotPolicy{
-				client:        http.DefaultClient,
-				robotPolicies: &sync.Map{},
-			}
+			robot := NewInMemoryRobotPolicy(http.DefaultClient)
 			robot.robotPolicies.Store("test.com", test.robotTxt)
 
 			url := &url.URL{Scheme: "http", Host: "test.com", Path: test.path}
