@@ -95,7 +95,7 @@ func (c *Crawler) crawlNextPage() error {
 	resp.Body.Close()
 
 	if err := isResponsesCrawlable(resp); err != nil {
-		slog.Warn(fmt.Sprintf("response from HEAD %s is not crawlable: %s", pageUrlStr, err))
+		slog.Warn(fmt.Sprintf("uncrawlable response from HEAD %s: %s", pageUrlStr, err))
 		return nil
 	}
 
@@ -108,7 +108,7 @@ func (c *Crawler) crawlNextPage() error {
 
 	// We double check in case the HEAD response was not representative
 	if err := isResponsesCrawlable(resp); err != nil {
-		slog.Warn(fmt.Sprintf("response from GET %s is not crawlable: %s", pageUrlStr, err))
+		slog.Warn(fmt.Sprintf("uncrawlable response from GET %s: %s", pageUrlStr, err))
 		return nil
 	}
 
@@ -164,15 +164,16 @@ func extractLinks(resp *http.Response) ([]*url.URL, error) {
 
 		link, err := resp.Request.URL.Parse(linkRelative)
 		if err != nil {
+			slog.Warn(fmt.Sprintf("failed to parse url: %s", err))
 			return
 		}
 
-		link, err = commons.NormalizeUrl(link)
+		linkNormalized, err := commons.NormalizeUrl(link)
 		if err != nil {
 			return
 		}
 
-		links = append(links, link)
+		links = append(links, linkNormalized)
 	})
 
 	return links, nil
