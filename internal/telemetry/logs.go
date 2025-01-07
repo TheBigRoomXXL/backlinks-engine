@@ -11,7 +11,6 @@ import (
 
 func init() {
 	s, _ := settings.New()
-	// TODO: append instead of tunc once tests app is stable
 	logFile, err := os.OpenFile(s.LOG_PATH, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0640)
 	if err != nil {
 		log.Fatal("failed to create log file: ", err)

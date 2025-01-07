@@ -23,7 +23,7 @@ type Settings struct {
 	HTTP_MAX_RETRY         int
 	CRAWLER_MAX_CONCURENCY int
 	LOG_PATH               string
-	TELEMETRY_LISTEN       string
+	TELEMETRY_PORT         string
 }
 
 var (
@@ -143,9 +143,9 @@ func initSettings() {
 		logPath = "errors.log"
 	}
 
-	telemetryListen, ok := os.LookupEnv("TELEMETRY_LISTEN")
+	telemetryPort, ok := os.LookupEnv("TELEMETRY_PORT")
 	if !ok {
-		telemetryListen = "127.0.0.1:4009"
+		telemetryPort = "4009"
 	}
 
 	settings = &Settings{
@@ -160,6 +160,6 @@ func initSettings() {
 		HTTP_MAX_RETRY:         httpMaxRetry,
 		CRAWLER_MAX_CONCURENCY: crawlerMaxConcurency,
 		LOG_PATH:               logPath,
-		TELEMETRY_LISTEN:       telemetryListen,
+		TELEMETRY_PORT:         telemetryPort,
 	}
 }
