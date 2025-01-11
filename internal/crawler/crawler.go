@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	clientpkg "github.com/TheBigRoomXXL/backlinks-engine/internal/client"
@@ -17,7 +16,6 @@ import (
 	controllerpkg "github.com/TheBigRoomXXL/backlinks-engine/internal/controller"
 	robotpkg "github.com/TheBigRoomXXL/backlinks-engine/internal/robot"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
-	"golang.org/x/sync/errgroup"
 )
 
 type Crawler struct {
@@ -25,7 +23,6 @@ type Crawler struct {
 	controller      *controllerpkg.Controller
 	fetcher         clientpkg.Fetcher
 	robot           robotpkg.RobotPolicy
-	group           *errgroup.Group
 	concurencyLimit int
 }
 
@@ -36,13 +33,10 @@ func NewCrawler(
 	robot robotpkg.RobotPolicy,
 	max_concurency int,
 ) *Crawler {
-	group, ctx := errgroup.WithContext(ctx)
-	group.SetLimit(max_concurency)
 
 	return &Crawler{
 		ctx:             ctx,
 		controller:      controller,
-		group:           group,
 		fetcher:         fetcher,
 		robot:           robot,
 		concurencyLimit: max_concurency,
@@ -55,33 +49,32 @@ func (c *Crawler) Seed(seeds []*url.URL) {
 
 func (c *Crawler) Run() error {
 	for i := 0; i < c.concurencyLimit; i++ {
-		c.group.Go(c.crawlNextPage)
+		go c.crawlPages()
 	}
 
-	ticker := time.NewTicker(time.Millisecond * 500)
-	defer ticker.Stop()
+	<-c.ctx.Done()
+	return nil
+}
+
+func (c *Crawler) crawlPages() error {
 	for {
 		select {
 		case <-c.ctx.Done():
 			return nil
-		case <-ticker.C:
-			for i := 0; i < c.concurencyLimit; i++ {
-				ok := c.group.TryGo(c.crawlNextPage)
-				if !ok {
-					break
-				}
-			}
+		default:
+			c.crawlNextPage()
 		}
+
 	}
 }
 
-func (c *Crawler) crawlNextPage() error {
+func (c *Crawler) crawlNextPage() {
 	pageUrl := c.controller.Next()
 	defer telemetry.ProcessedURL.Add(1)
 
 	if !c.robot.IsAllowed(pageUrl) {
 		telemetry.RobotDisallowed.Add(1)
-		return nil
+		return
 	} else {
 		telemetry.RobotAllowed.Add(1)
 	}
@@ -90,32 +83,32 @@ func (c *Crawler) crawlNextPage() error {
 	resp, err := c.fetcher.Head(pageUrlStr)
 	if err != nil {
 		slog.Error(err.Error())
-		return nil
+		return
 	}
 	resp.Body.Close()
 
 	if err := isResponsesCrawlable(resp); err != nil {
 		slog.Warn(fmt.Sprintf("uncrawlable response from HEAD %s: %s", pageUrlStr, err))
-		return nil
+		return
 	}
 
 	resp, err = c.fetcher.Get(pageUrlStr)
 	if err != nil {
 		slog.Error(err.Error())
-		return nil
+		return
 	}
 	defer resp.Body.Close()
 
 	// We double check in case the HEAD response was not representative
 	if err := isResponsesCrawlable(resp); err != nil {
 		slog.Warn(fmt.Sprintf("uncrawlable response from GET %s: %s", pageUrlStr, err))
-		return nil
+		return
 	}
 
 	links, err := extractLinks(resp)
 	if err != nil {
 		slog.Error(err.Error())
-		return nil
+		return
 	}
 
 	linkSet := make(map[string]*url.URL)
@@ -129,7 +122,6 @@ func (c *Crawler) crawlNextPage() error {
 	})
 
 	telemetry.Links.Add(int64(len(linkSet)))
-	return nil
 }
 
 func isResponsesCrawlable(resp *http.Response) error {
