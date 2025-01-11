@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -72,9 +71,7 @@ func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
 	v, _ := c.rateLimiters.LoadOrStore(req.Method+req.Host, rate.NewLimiter(c.rateLimit, 1))
 	rateLimiter := v.(*rate.Limiter)
 
-	t0 := time.Now()
 	err := rateLimiter.Wait(c.ctx) // This is a blocking call. Honors the rate limit
-	slog.Info(fmt.Sprintf("waited %s for a limit of %0.2f on %s %s ", time.Since(t0), rateLimiter.Limit(), req.Method, req.Host))
 	if err != nil {
 		return nil, fmt.Errorf("error while waiting for rate limit: %w", err)
 	}
