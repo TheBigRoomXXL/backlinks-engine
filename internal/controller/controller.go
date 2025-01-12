@@ -57,6 +57,10 @@ func (c *Controller) nextProducer() {
 	for {
 		rows, err := selectNextPages(c.ctx, c.pg)
 		if err != nil {
+			if strings.Contains(err.Error(), "context canceled") {
+				slog.Warn("context canceled in planner, exiting.")
+				return
+			}
 			slog.Error(fmt.Sprintf("error in planner: unable to get next pages: %s", err))
 			continue
 		}
