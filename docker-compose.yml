@@ -18,15 +18,15 @@ services:
     environment:
       POSTGRES_USER: $DB_USER
       POSTGRES_PASSWORD: $DB_PASSWORD
-      POSTGRES_DB : $DB_NAME
+      POSTGRES_DB: $DB_NAME
       PGDATA: /data/postgres
     volumes:
-       - postgres_data:/data/postgres
+      - postgres_data:/data/postgres
     ports:
       - "4010:5432"
     restart: unless-stopped
 
-  admin:
+  adminer:
     image: adminer
     restart: always
     ports:
