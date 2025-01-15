@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net/url"
 	"os"
@@ -44,7 +43,7 @@ func main() {
 
 	err := cli(ctx)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
 	}
 }
 
