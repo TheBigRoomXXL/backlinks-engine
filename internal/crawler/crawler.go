@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	clientpkg "github.com/TheBigRoomXXL/backlinks-engine/internal/client"
@@ -69,44 +70,66 @@ func (c *Crawler) crawlPages() error {
 }
 
 func (c *Crawler) crawlNextPage() {
-	pageUrl := c.controller.Next()
+	t0 := time.Now()
+	defer func() { telemetry.PageProcessDuration.Observe(time.Since(t0).Seconds()) }()
 	defer telemetry.ProcessedURL.Add(1)
 
-	if !c.robot.IsAllowed(pageUrl) {
+	pageUrl := c.controller.Next()
+	t1 := time.Now()
+	telemetry.NextDuration.Observe(t1.Sub(t0).Seconds())
+
+	isAllowed := !c.robot.IsAllowed(pageUrl)
+
+	if isAllowed {
 		telemetry.RobotDisallowed.Add(1)
+		telemetry.RobotDuration.Observe(time.Since(t1).Seconds())
 		return
-	} else {
-		telemetry.RobotAllowed.Add(1)
 	}
+	telemetry.RobotAllowed.Add(1)
+	t2 := time.Now()
+	telemetry.RobotDuration.Observe(t2.Sub(t1).Seconds())
 
 	pageUrlStr := pageUrl.String()
 	resp, err := c.fetcher.Head(pageUrlStr)
 	if err != nil {
 		slog.Error(err.Error())
+		telemetry.HeadDuration.Observe(time.Since(t2).Seconds())
 		return
 	}
 	resp.Body.Close()
+	t3 := time.Now()
+	telemetry.HeadDuration.Observe(t3.Sub(t2).Seconds())
 
 	if err := isResponsesCrawlable(resp); err != nil {
 		slog.Warn(fmt.Sprintf("uncrawlable response from HEAD %s: %s", pageUrlStr, err))
+		telemetry.IsCrawlableDuration1.Observe(time.Since(t3).Seconds())
 		return
 	}
+	t4 := time.Now()
+	telemetry.IsCrawlableDuration1.Observe(t4.Sub(t3).Seconds())
 
 	resp, err = c.fetcher.Get(pageUrlStr)
 	if err != nil {
+		telemetry.GetDuration.Observe(time.Since(t4).Seconds())
 		slog.Error(err.Error())
 		return
 	}
 	defer resp.Body.Close()
+	t5 := time.Now()
+	telemetry.GetDuration.Observe(t5.Sub(t4).Seconds())
 
 	// We double check in case the HEAD response was not representative
 	if err := isResponsesCrawlable(resp); err != nil {
+		telemetry.IsCrawlableDuration2.Observe(time.Since(t5).Seconds())
 		slog.Warn(fmt.Sprintf("uncrawlable response from GET %s: %s", pageUrlStr, err))
 		return
 	}
+	t6 := time.Now()
+	telemetry.IsCrawlableDuration2.Observe(t6.Sub(t5).Seconds())
 
 	links, err := extractLinks(resp)
 	if err != nil {
+		telemetry.ExtractLinksDuration.Observe(time.Since(t6).Seconds())
 		slog.Error(err.Error())
 		return
 	}
@@ -115,12 +138,14 @@ func (c *Crawler) crawlNextPage() {
 	for _, link := range links {
 		linkSet[link.String()] = link
 	}
+	t7 := time.Now()
+	telemetry.ExtractLinksDuration.Observe(t7.Sub(t6).Seconds())
 
 	c.controller.Add(&commons.LinkGroup{
 		From: pageUrl,
 		To:   slices.Collect(maps.Values(linkSet)),
 	})
-
+	telemetry.AddDuration.Observe(time.Since(t7).Seconds())
 	telemetry.Links.Add(int64(len(linkSet)))
 }
 
