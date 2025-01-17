@@ -32,7 +32,39 @@ services:
     ports:
       - 4011:8080
 
+  jaeger:
+    image: jaegertracing/jaeger:${JAEGER_IMAGE_TAG:-latest}
+    volumes:
+      - type: bind
+        source: monitoring/config-spm.yml
+        target: /etc/jaeger/config.yml
+    command: ["--config", "/etc/jaeger/config.yml"]
+    ports:
+      - "16686:16686"
+      - "8888:8888"
+      - "8889:8889"
+      - "4317:4317"
+      - "4318:4318"
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    volumes:
+    - type: bind
+      source: monitoring/prometheus.yml
+      target: /etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  microsim:
+    image: yurishkuro/microsim:v0.4.1
+    command: "-d 24h -s 500ms"
+    environment:
+      - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://jaeger:4318/v1/traces
+    depends_on:
+      - jaeger
+
 volumes:
   # clickhouse_data:
   # clickhouse_config:
   postgres_data:
+
