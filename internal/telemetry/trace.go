@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var Tracer trace.Tracer
+var Tracer = otel.Tracer("")
 var TracerProvider trace.TracerProvider
 
 func InitTracing(ctx context.Context) func() {

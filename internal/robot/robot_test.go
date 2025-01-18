@@ -1,6 +1,7 @@
 package robot
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -137,7 +138,7 @@ func TestRobotIsAllowed(t *testing.T) {
 			robot.robotPolicies.Store("test.com", test.robotTxt)
 
 			url := &url.URL{Scheme: "http", Host: "test.com", Path: test.path}
-			result := robot.IsAllowed(url)
+			result := robot.IsAllowed(context.Background(), url)
 			if result != test.IsAllowed {
 				t.Fatalf("robot.txt rule not respected: want %t, go %t", test.IsAllowed, result)
 			}
