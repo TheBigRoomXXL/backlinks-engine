@@ -1,6 +1,9 @@
 package internal
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+)
 
 type MockTransport struct {
 	Response *http.Response
@@ -23,4 +26,22 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	m.NbCall++
 	return m.Response, m.Err
+}
+
+// Implement the fetcher interface to mock during tests
+type TestFetcher struct {
+	c *http.Client
+}
+
+// The fetcher will return the given response and error when Get or HEad is called
+func NewTestFetcher(resp *http.Response, err error) *TestFetcher {
+	return &TestFetcher{c: &http.Client{Transport: NewMockTransport(resp, err)}}
+}
+
+func (f *TestFetcher) Get(ctx context.Context, url string) (*http.Response, error) {
+	return f.c.Get(url)
+}
+
+func (f *TestFetcher) Head(ctx context.Context, url string) (*http.Response, error) {
+	return f.c.Head(url)
 }

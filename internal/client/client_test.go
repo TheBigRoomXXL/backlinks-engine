@@ -49,7 +49,7 @@ func TestCrawlClientGetSuccessfull(t *testing.T) {
 			)
 			client.client.Transport = internal.NewMockTransport(response, nil)
 
-			result, err := client.Get("http://test.com/truc")
+			result, err := client.Get(context.Background(), "http://test.com/truc")
 			if err != nil {
 				t.Fatalf("Unexpected error calling CrawlClient.Get : %s", err)
 			}
@@ -80,7 +80,7 @@ func TestCrawlClientHeadSuccessfull(t *testing.T) {
 			client.client.Transport = internal.NewMockTransport(response, nil)
 
 			// Test
-			result, err := client.Head("http://test.com/truc")
+			result, err := client.Head(context.Background(), "http://test.com/truc")
 			if err != nil {
 				t.Fatalf("Unexpected error calling CrawlClient.Head : %s", err)
 			}
@@ -102,7 +102,7 @@ func TestCrawlClientGetFailed(t *testing.T) {
 	client.client.Transport = internal.NewMockTransport(nil, err)
 
 	// Test
-	result, errResult := client.Get("http://test.com/truc")
+	result, errResult := client.Get(context.Background(), "http://test.com/truc")
 	if !strings.Contains(errResult.Error(), err.Error()) {
 		t.Fatalf("Bad error from CrawlClient : want %s ; got %s", err, errResult)
 	}
@@ -118,7 +118,7 @@ func TestCrawlClientHeadFailed(t *testing.T) {
 	client.client.Transport = internal.NewMockTransport(nil, err)
 
 	// Test
-	result, errResult := client.Head("http://test.com/truc")
+	result, errResult := client.Head(context.Background(), "http://test.com/truc")
 	if !strings.Contains(errResult.Error(), err.Error()) {
 		t.Fatalf("Bad error from CrawlClient : want %s ; got %s", err, errResult)
 	}
@@ -140,9 +140,9 @@ func TestCrawlRateLimitGet(t *testing.T) {
 
 	// Test
 	t0 := time.Now()
-	client.Get("http://test.com/truc")
-	client.Get("http://test.com/truc")
-	client.Get("http://test.com/truc")
+	client.Get(context.Background(), "http://test.com/truc")
+	client.Get(context.Background(), "http://test.com/truc")
+	client.Get(context.Background(), "http://test.com/truc")
 	result := time.Since(t0)
 	if result < 20*time.Millisecond || result > 25*time.Millisecond {
 		t.Fatalf("GET Request are not properly rate limited: 3 request in %s", result)
@@ -162,8 +162,8 @@ func TestCrawlRateLimitGetAndHead(t *testing.T) {
 
 	// Test
 	t0 := time.Now()
-	client.Get("http://test.com/truc")
-	client.Head("http://test.com/truc")
+	client.Get(context.Background(), "http://test.com/truc")
+	client.Head(context.Background(), "http://test.com/truc")
 	result := time.Since(t0)
 	if result > 5*time.Millisecond {
 		t.Fatalf("GET and HEAD requests should not share the same rate limiter: 2 request in %s", result)
@@ -183,9 +183,9 @@ func TestCrawlRateLimitMultiDomainGet(t *testing.T) {
 
 	// Test
 	t0 := time.Now()
-	client.Get("http://test.com/truc")
-	client.Get("http://no-test.com/truc")
-	client.Get("http://another-test.com/truc")
+	client.Get(context.Background(), "http://test.com/truc")
+	client.Get(context.Background(), "http://no-test.com/truc")
+	client.Get(context.Background(), "http://another-test.com/truc")
 	result := time.Since(t0)
 	if result > 5*time.Millisecond {
 		t.Fatalf("GET Request share rate limit between different domain: 3 request in %s", result)
@@ -205,15 +205,15 @@ func TestCrawlRateLimitMultiDomainGet2(t *testing.T) {
 
 	// Test
 	t0 := time.Now()
-	client.Get("http://test.com/truc")
-	client.Get("http://no-test.com/truc")
-	client.Get("http://another-test.com/truc")
-	client.Get("http://test.com/truc")
-	client.Get("http://no-test.com/truc")
-	client.Get("http://another-test.com/truc")
-	client.Get("http://test.com/truc")
-	client.Get("http://no-test.com/truc")
-	client.Get("http://another-test.com/truc")
+	client.Get(context.Background(), "http://test.com/truc")
+	client.Get(context.Background(), "http://no-test.com/truc")
+	client.Get(context.Background(), "http://another-test.com/truc")
+	client.Get(context.Background(), "http://test.com/truc")
+	client.Get(context.Background(), "http://no-test.com/truc")
+	client.Get(context.Background(), "http://another-test.com/truc")
+	client.Get(context.Background(), "http://test.com/truc")
+	client.Get(context.Background(), "http://no-test.com/truc")
+	client.Get(context.Background(), "http://another-test.com/truc")
 	result := time.Since(t0)
 	if result < 20*time.Millisecond {
 		t.Fatalf("GET Request are not properly rate limited: 9 request between 3 domains in %s", result)
@@ -233,9 +233,9 @@ func TestCrawlRateLimitMultiDomainHead(t *testing.T) {
 
 	// Test
 	t0 := time.Now()
-	client.Head("http://test.com/truc")
-	client.Head("http://no-test.com/truc")
-	client.Head("http://another-test.com/truc")
+	client.Head(context.Background(), "http://test.com/truc")
+	client.Head(context.Background(), "http://no-test.com/truc")
+	client.Head(context.Background(), "http://another-test.com/truc")
 	result := time.Since(t0)
 	if result > 5*time.Millisecond {
 		t.Fatalf("GET Request share rate limit between different domain: 3 request in %s", result)
@@ -255,15 +255,15 @@ func TestCrawlRateLimitMultiDomainHead2(t *testing.T) {
 
 	// Test
 	t0 := time.Now()
-	client.Head("http://test.com/truc")
-	client.Head("http://no-test.com/truc")
-	client.Head("http://another-test.com/truc")
-	client.Head("http://test.com/truc")
-	client.Head("http://no-test.com/truc")
-	client.Head("http://another-test.com/truc")
-	client.Head("http://test.com/truc")
-	client.Head("http://no-test.com/truc")
-	client.Head("http://another-test.com/truc")
+	client.Head(context.Background(), "http://test.com/truc")
+	client.Head(context.Background(), "http://no-test.com/truc")
+	client.Head(context.Background(), "http://another-test.com/truc")
+	client.Head(context.Background(), "http://test.com/truc")
+	client.Head(context.Background(), "http://no-test.com/truc")
+	client.Head(context.Background(), "http://another-test.com/truc")
+	client.Head(context.Background(), "http://test.com/truc")
+	client.Head(context.Background(), "http://no-test.com/truc")
+	client.Head(context.Background(), "http://another-test.com/truc")
 	result := time.Since(t0)
 	if result < 20*time.Millisecond {
 		t.Fatalf("GET Request are not properly rate limited: 9 request between 3 domains in %s", result)
@@ -277,7 +277,7 @@ func TestCrawlDynamicRateLimiting(t *testing.T) {
 	client.client.Transport = internal.NewMockTransport(NewResponse(429), nil)
 
 	// Test
-	client.Get("http://test.com/truc")
+	client.Get(context.Background(), "http://test.com/truc")
 	v, ok := client.rateLimiters.Load("GETtest.com")
 	if !ok {
 		t.Fatal("rate limit was not initialized")
@@ -305,7 +305,7 @@ func TestCrawlRetryStopAfterGoodResponse(t *testing.T) {
 	)
 	client.client.Transport = mock
 
-	responseC, err := client.Get("http://test.com/truc")
+	responseC, err := client.Get(context.Background(), "http://test.com/truc")
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -329,7 +329,7 @@ func TestCrawlRetryCount(t *testing.T) {
 			)
 			client.client.Transport = mock
 
-			client.Get("http://test.com/truc")
+			client.Get(context.Background(), "http://test.com/truc")
 			// +1 is for initial call
 			if mock.NbCall != 5+1 {
 				t.Fatalf("Retried wrong number of time: want %d, got %d", n, mock.NbCall)
@@ -348,7 +348,7 @@ func TestCrawlRetryBackoff(t *testing.T) {
 
 	// Test
 	t0 := time.Now()
-	client.Get("http://test.com/truc")
+	client.Get(context.Background(), "http://test.com/truc")
 	result := time.Since(t0)
 
 	// First call should be instantaneous, then wait 10ms, 100ms, 1000ms

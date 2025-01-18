@@ -11,14 +11,15 @@ import (
 	"time"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"golang.org/x/time/rate"
 )
 
 var retryStatus = []int{408, 425, 429, 500, 502, 503, 504}
 
 type Fetcher interface {
-	Head(url string) (resp *http.Response, err error)
-	Get(url string) (resp *http.Response, err error)
+	Head(ctx context.Context, url string) (resp *http.Response, err error)
+	Get(ctx context.Context, url string) (resp *http.Response, err error)
 }
 
 // Wrap the default http client with crawling specific feature:
@@ -50,8 +51,8 @@ func NewCrawlClient(
 			DualStack: true,
 		}).DialContext,
 		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100, // Default: 100
-		MaxIdleConnsPerHost:   2,   // Default: 2
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   2,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
@@ -113,7 +114,10 @@ func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-func (c *CrawlClient) Get(url string) (resp *http.Response, err error) {
+func (c *CrawlClient) Get(ctx context.Context, url string) (resp *http.Response, err error) {
+	_, span := telemetry.Tracer.Start(ctx, "CrawlClient.Get")
+	defer span.End()
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -122,7 +126,10 @@ func (c *CrawlClient) Get(url string) (resp *http.Response, err error) {
 	return c.Do(req)
 }
 
-func (c *CrawlClient) Head(url string) (resp *http.Response, err error) {
+func (c *CrawlClient) Head(ctx context.Context, url string) (resp *http.Response, err error) {
+	_, span := telemetry.Tracer.Start(ctx, "CrawlClient.Head")
+	defer span.End()
+
 	req, err := http.NewRequest("HEAD", url, nil)
 	if err != nil {
 		return nil, err

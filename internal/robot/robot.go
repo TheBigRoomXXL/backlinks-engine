@@ -47,7 +47,7 @@ func (r *InMemoryRobotPolicy) IsAllowed(ctx context.Context, url *url.URL) bool 
 	mu.Lock()
 	robotTxt, ok := r.robotPolicies.Load(hostname)
 	if !ok {
-		robotTxt = r.getRobotPolicy(hostname)
+		robotTxt = r.getRobotPolicy(ctx, hostname)
 		r.robotPolicies.Store(hostname, robotTxt)
 	}
 	mu.Unlock()
@@ -56,8 +56,8 @@ func (r *InMemoryRobotPolicy) IsAllowed(ctx context.Context, url *url.URL) bool 
 	return grobotstxt.AgentAllowed(robotTxtStr, "BacklinksBot", url.String())
 }
 
-func (r *InMemoryRobotPolicy) getRobotPolicy(hostname string) string {
-	resp, err := r.client.Get("http://" + hostname + "/robots.txt")
+func (r *InMemoryRobotPolicy) getRobotPolicy(ctx context.Context, hostname string) string {
+	resp, err := r.client.Get(ctx, "http://"+hostname+"/robots.txt")
 	if err != nil {
 		slog.Warn(fmt.Sprintf("failed to get robot.txt for %s: %s", hostname, err))
 		return norobot

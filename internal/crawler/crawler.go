@@ -83,7 +83,7 @@ func (c *Crawler) crawlNextPage() {
 	}
 
 	pageUrlStr := pageUrl.String()
-	resp, err := c.fetcher.Head(pageUrlStr)
+	resp, err := c.fetcher.Head(ctx, pageUrlStr)
 	if err != nil {
 		slog.Error(err.Error())
 		return
@@ -95,7 +95,7 @@ func (c *Crawler) crawlNextPage() {
 		return
 	}
 
-	resp, err = c.fetcher.Get(pageUrlStr)
+	resp, err = c.fetcher.Get(ctx, pageUrlStr)
 	if err != nil {
 		slog.Error(err.Error())
 		return

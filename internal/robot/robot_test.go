@@ -2,7 +2,6 @@ package robot
 
 import (
 	"context"
-	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
@@ -23,12 +22,10 @@ func TestRobotGetPolicySuccess(t *testing.T) {
 	recorder.WriteString(policy)
 	response := recorder.Result()
 
-	mock := internal.NewMockTransport(response, nil)
-	client := &http.Client{Transport: mock}
-	robot := NewInMemoryRobotPolicy(client)
+	robot := NewInMemoryRobotPolicy(internal.NewTestFetcher(response, nil))
 
 	// Test
-	result := robot.getRobotPolicy("test.com")
+	result := robot.getRobotPolicy(context.Background(), "test.com")
 	if result != policy {
 		t.Fatalf("failed to get robot.txt: want '%s'; got'%s'\n (length %d vs %d)", policy, result, len(policy), len(result))
 	}
@@ -45,12 +42,10 @@ func TestRobotGetPolicyBadResponseStatus(t *testing.T) {
 			recorder.WriteHeader(500)
 			response := recorder.Result()
 
-			mock := internal.NewMockTransport(response, nil)
-			client := &http.Client{Transport: mock}
-			robot := NewInMemoryRobotPolicy(client)
+			robot := NewInMemoryRobotPolicy(internal.NewTestFetcher(response, nil))
 
 			// Test
-			result := robot.getRobotPolicy("test.com")
+			result := robot.getRobotPolicy(context.Background(), "test.com")
 			if result != norobot {
 				t.Fatalf("failed to handle bad status: want '%s'; got '%s'\n", norobot, result)
 			}
@@ -69,12 +64,10 @@ func TestRobotGetPolicyBadContentType(t *testing.T) {
 			recorder.WriteHeader(500)
 			response := recorder.Result()
 
-			mock := internal.NewMockTransport(response, nil)
-			client := &http.Client{Transport: mock}
-			robot := NewInMemoryRobotPolicy(client)
+			robot := NewInMemoryRobotPolicy(internal.NewTestFetcher(response, nil))
 
 			// Test
-			result := robot.getRobotPolicy("test.com")
+			result := robot.getRobotPolicy(context.Background(), "test.com")
 			if result != norobot {
 				t.Fatalf("failed to handle bad status: want '%s'; got '%s'\n", norobot, result)
 			}
@@ -134,7 +127,7 @@ func TestRobotIsAllowed(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			// Setup
-			robot := NewInMemoryRobotPolicy(http.DefaultClient)
+			robot := NewInMemoryRobotPolicy(internal.NewTestFetcher(nil, nil))
 			robot.robotPolicies.Store("test.com", test.robotTxt)
 
 			url := &url.URL{Scheme: "http", Host: "test.com", Path: test.path}
