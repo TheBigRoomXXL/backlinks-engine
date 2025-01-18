@@ -9,11 +9,9 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
-	"go.opentelemetry.io/otel/trace"
 )
 
 var Tracer = otel.Tracer("")
-var TracerProvider trace.TracerProvider
 
 func InitTracing(ctx context.Context) func() {
 	// Create the exporter
@@ -39,17 +37,17 @@ func InitTracing(ctx context.Context) func() {
 		log.Panic("tracing failed to initialize resource: ", err)
 	}
 
-	TracerProvider := sdktrace.NewTracerProvider(
+	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(ressource),
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 	)
 
-	otel.SetTracerProvider(TracerProvider)
+	otel.SetTracerProvider(tracerProvider)
 
 	// Finally, set the tracer that can be used for this package.
-	Tracer = TracerProvider.Tracer("github.com/TheBigRoomXXL/backlinks-engine")
+	Tracer = tracerProvider.Tracer("github.com/TheBigRoomXXL/backlinks-engine")
 
-	return func() { TracerProvider.Shutdown(ctx) }
+	return func() { tracerProvider.Shutdown(ctx) }
 
 }
