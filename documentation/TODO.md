@@ -23,3 +23,6 @@
 - Rename controller.Add to controller.AddSuccesfull and add controller.AddFailed
 - redo the GetNextPage query. Some king of weight based query ? 
 - Decide waht information to keep for each page based on the cache system and the new GetNextPage query.
+- Bring back interface for fetch / controller / robopolicy oncce it's stablelize
+- Remove auto retry from CrawlClient and deleguate that to the controller
+- Handle redirect tracability correctly
