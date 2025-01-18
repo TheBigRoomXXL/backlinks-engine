@@ -1,6 +1,7 @@
 package robot
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -9,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/client"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/jimsmart/grobotstxt"
 )
 
@@ -32,10 +34,13 @@ func NewInMemoryRobotPolicy(fetcher client.Fetcher) *InMemoryRobotPolicy {
 	}
 }
 
-func (r *InMemoryRobotPolicy) IsAllowed(url *url.URL) bool {
-	// This double locking kind of terrible but I could not find a better way to escure
+func (r *InMemoryRobotPolicy) IsAllowed(ctx context.Context, url *url.URL) bool {
+	_, span := telemetry.Tracer.Start(ctx, "IsAllowed")
+	defer span.End()
+
+	// This double locking is kind of terrible but I could not find a better way to escure
 	// strictly one execution of getRobotPolicy (to use LoadOrStore you must have the value
-	// before hand but what i want is actually the fetch the value only if needed)
+	// before hand but what i want is actually to fetch the value only if needed)
 	hostname := url.Hostname()
 	anymu, _ := r.locks.LoadOrStore(hostname, &sync.Mutex{})
 	mu := anymu.(*sync.Mutex)

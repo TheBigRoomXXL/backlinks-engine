@@ -21,16 +21,16 @@ import (
 type Crawler struct {
 	ctx             context.Context
 	controller      *controllerpkg.Controller
-	fetcher         clientpkg.Fetcher
-	robot           robotpkg.RobotPolicy
+	fetcher         *clientpkg.CrawlClient
+	robot           *robotpkg.InMemoryRobotPolicy
 	concurencyLimit int
 }
 
 func NewCrawler(
 	ctx context.Context,
 	controller *controllerpkg.Controller,
-	fetcher clientpkg.Fetcher,
-	robot robotpkg.RobotPolicy,
+	fetcher *clientpkg.CrawlClient,
+	robot *robotpkg.InMemoryRobotPolicy,
 	max_concurency int,
 ) *Crawler {
 
@@ -69,10 +69,13 @@ func (c *Crawler) crawlPages() error {
 }
 
 func (c *Crawler) crawlNextPage() {
-	pageUrl := c.controller.Next()
+	ctx, span := telemetry.Tracer.Start(context.Background(), "crawlNextPage")
+	defer span.End()
 	defer telemetry.ProcessedURL.Add(1)
 
-	if !c.robot.IsAllowed(pageUrl) {
+	pageUrl := c.controller.Next(ctx)
+
+	if !c.robot.IsAllowed(ctx, pageUrl) {
 		telemetry.RobotDisallowed.Add(1)
 		return
 	} else {
@@ -105,23 +108,15 @@ func (c *Crawler) crawlNextPage() {
 		return
 	}
 
-	links, err := extractLinks(resp)
+	linkGroup, err := extractLinks(ctx, resp)
 	if err != nil {
 		slog.Error(err.Error())
 		return
 	}
 
-	linkSet := make(map[string]*url.URL)
-	for _, link := range links {
-		linkSet[link.String()] = link
-	}
+	c.controller.Add(ctx, linkGroup)
 
-	c.controller.Add(&commons.LinkGroup{
-		From: pageUrl,
-		To:   slices.Collect(maps.Values(linkSet)),
-	})
-
-	telemetry.Links.Add(int64(len(linkSet)))
+	telemetry.Links.Add(int64(len(linkGroup.To)))
 }
 
 func isResponsesCrawlable(resp *http.Response) error {
@@ -141,7 +136,10 @@ func isResponsesCrawlable(resp *http.Response) error {
 	return nil
 }
 
-func extractLinks(resp *http.Response) ([]*url.URL, error) {
+func extractLinks(ctx context.Context, resp *http.Response) (*commons.LinkGroup, error) {
+	_, span := telemetry.Tracer.Start(ctx, "extractLinks")
+	defer span.End()
+
 	links := make([]*url.URL, 0)
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
@@ -168,5 +166,13 @@ func extractLinks(resp *http.Response) ([]*url.URL, error) {
 		links = append(links, linkNormalized)
 	})
 
-	return links, nil
+	linkSet := make(map[string]*url.URL)
+	for _, link := range links {
+		linkSet[link.String()] = link
+	}
+
+	return &commons.LinkGroup{
+		From: resp.Request.URL,
+		To:   slices.Collect(maps.Values(linkSet)),
+	}, nil
 }

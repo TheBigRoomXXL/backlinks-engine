@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -42,11 +43,15 @@ func NewController(ctx context.Context, pgURI string) (*Controller, error) {
 	return c, nil
 }
 
-func (c *Controller) Add(group *commons.LinkGroup) {
+func (c *Controller) Add(ctx context.Context, group *commons.LinkGroup) {
+	_, span := telemetry.Tracer.Start(ctx, "Controller.Add")
+	defer span.End()
 	c.addChan <- group
 }
 
-func (c *Controller) Next() *url.URL {
+func (c *Controller) Next(ctx context.Context) *url.URL {
+	_, span := telemetry.Tracer.Start(ctx, "Controller.Next")
+	defer span.End()
 	return <-c.nextChan
 }
 
