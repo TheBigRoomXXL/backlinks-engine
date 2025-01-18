@@ -13,47 +13,43 @@ import (
 )
 
 var Tracer trace.Tracer
+var TracerProvider trace.TracerProvider
 
-func newExporter(ctx context.Context) (sdktrace.SpanExporter, error) {
-	return otlptracehttp.New(ctx)
-}
+func InitTracing(ctx context.Context) func() {
+	// Create the exporter
+	exporter, err := otlptracehttp.New(
+		ctx,
+		otlptracehttp.WithEndpoint("localhost:4318"),
+		otlptracehttp.WithInsecure(),
+	)
+	if err != nil {
+		log.Panic("tracing failed to initialize exporter: ", err)
+	}
 
-func newTraceProvider(exp sdktrace.SpanExporter) *sdktrace.TracerProvider {
-	// Ensure default SDK resources and the required service name are set.
-	r, err := resource.Merge(
+	// Create a new tracer provider with a batch span processor and the given exporter.
+	ressource, err := resource.Merge(
 		resource.Default(),
 		resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceName("ExampleService"),
+			semconv.ServiceName("BacklinkBot"),
 		),
 	)
 
 	if err != nil {
-		panic(err)
+		log.Panic("tracing failed to initialize resource: ", err)
 	}
 
-	return sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exp),
-		sdktrace.WithResource(r),
+	TracerProvider := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(ressource),
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 	)
-}
 
-func InitTracing(ctx context.Context) {
-	ctx := context.Background()
-
-	exp, err := newExporter(ctx)
-	if err != nil {
-		log.Fatalf("failed to initialize exporter: %v", err)
-	}
-
-	// Create a new tracer provider with a batch span processor and the given exporter.
-	tp := newTraceProvider(exp)
-
-	// Handle shutdown properly so nothing leaks.
-	defer func() { _ = tp.Shutdown(ctx) }()
-
-	otel.SetTracerProvider(tp)
+	otel.SetTracerProvider(TracerProvider)
 
 	// Finally, set the tracer that can be used for this package.
-	Tracer = tp.Tracer("example.io/package/name")
+	Tracer = TracerProvider.Tracer("github.com/TheBigRoomXXL/backlinks-engine")
+
+	return func() { TracerProvider.Shutdown(ctx) }
+
 }

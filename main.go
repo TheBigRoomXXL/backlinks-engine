@@ -67,6 +67,8 @@ func cli(ctx context.Context) error {
 			return errors.New("failed to initialize setttings properly")
 		}
 		go telemetry.StartTelemetryServer("localhost:" + s.TELEMETRY_PORT)
+		shutdown := telemetry.InitTracing(ctx)
+		defer shutdown()
 
 		PostgresURI := fmt.Sprintf(
 			"postgresql://%s:%s@%s:%s/%s?%s",
