@@ -24,3 +24,5 @@
 - redo the GetNextPage query. Some king of weight based query ? 
 - Decide waht information to keep for each page based on the cache system and the new GetNextPage query.
 - Truncate response body above 500KB
+- add the following IPv6 test case to url normalizer
+- add fuzzing to url normalizer

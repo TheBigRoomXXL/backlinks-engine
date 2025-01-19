@@ -3,6 +3,7 @@ package commons
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"slices"
 	"strings"
@@ -30,7 +31,6 @@ func NormalizeUrl(url *url.URL) (*url.URL, error) {
 	if url.Scheme == "" {
 		url.Scheme = "http"
 	}
-
 	if url.Scheme != "http" && url.Scheme != "https" {
 		return nil, fmt.Errorf("url scheme is not http or https: %s", url.Scheme)
 	}
@@ -39,10 +39,20 @@ func NormalizeUrl(url *url.URL) (*url.URL, error) {
 	if p != "" && p != "80" && p != "443" {
 		return nil, fmt.Errorf("port is not 80 or 443: %s", p)
 	}
+
 	url.Host = url.Hostname()
+	addr := net.ParseIP(url.Host)
+	fmt.Println("adress is: ", url.Host, addr)
+	if addr != nil {
+		return nil, fmt.Errorf("hostname is an ip adress: %s", url.Host)
+	}
+
+	if url.Path == "/" {
+		url.Path = ""
+	}
+
 	url.Fragment = ""
 	url.RawQuery = ""
-
 	return url, nil
 }
 

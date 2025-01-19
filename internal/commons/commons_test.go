@@ -38,13 +38,17 @@ func TestReverseHostname(t *testing.T) {
 	}
 }
 
-func TestNornalizeURL(t *testing.T) {
+func TestNornalizeValidURL(t *testing.T) {
 	tests := []struct {
 		input  string
 		output string
 	}{
 		{
-			input:  "test.com",
+			input:  "lovergne.dev",
+			output: "http://lovergne.dev",
+		},
+		{
+			input:  "http://test.com/",
 			output: "http://test.com",
 		},
 		{
@@ -78,6 +82,43 @@ func TestNornalizeURL(t *testing.T) {
 			}
 			if got.String() != test.output {
 				t.Fatalf("NormalizeUrl(%s) failed: want %s; got %s", test.input, test.output, got)
+			}
+		})
+	}
+}
+
+func TestNornalizeInvalidURL(t *testing.T) {
+	tests := []struct {
+		input string
+		err   string
+	}{
+		{
+			input: "ftp://test.com",
+			err:   "url scheme is not http or https: ftp",
+		},
+		{
+			input: "http://test.com:4531",
+			err:   "port is not 80 or 443: 4531",
+		},
+		{
+			input: "http://127.0.0.1/",
+			err:   "hostname is an ip adress: 127.0.0.1",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.input, func(t *testing.T) {
+			t.Parallel()
+			url, err := url.Parse(test.input)
+			if err != nil {
+				t.Fatal("invalid test input")
+			}
+			url, err = NormalizeUrl(url)
+			if err == nil || err.Error() != test.err {
+				t.Fatalf("unexpected error: want '%s'; got '%s'", test.err, err)
+			}
+			if url != nil {
+				t.Fatalf("unexpected url value: want nil, go %s", url)
 			}
 		})
 	}
