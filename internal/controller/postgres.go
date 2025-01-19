@@ -163,7 +163,7 @@ func selectNextPages(ctx context.Context, db *pgxpool.Pool) (pgx.Rows, error) {
 			SELECT DISTINCT ON (host_reversed) id
 			FROM pages
 			WHERE latest_visit IS NULL
-			LIMIT 2048
+			LIMIT 8192
 		)
 		UPDATE pages
 		SET latest_visit = NOW()
