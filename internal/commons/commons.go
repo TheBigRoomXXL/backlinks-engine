@@ -42,7 +42,6 @@ func NormalizeUrl(url *url.URL) (*url.URL, error) {
 
 	url.Host = url.Hostname()
 	addr := net.ParseIP(url.Host)
-	fmt.Println("adress is: ", url.Host, addr)
 	if addr != nil {
 		return nil, fmt.Errorf("hostname is an ip adress: %s", url.Host)
 	}
