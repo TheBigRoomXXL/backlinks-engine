@@ -27,7 +27,7 @@ func NewController(ctx context.Context, pgURI string) (*Controller, error) {
 		return nil, fmt.Errorf("failed to init postgres connection pool: %w", err)
 	}
 	addChan := make(chan *commons.LinkGroup)
-	nextChan := make(chan *url.URL)
+	nextChan := make(chan *url.URL, 8192)
 
 	c := &Controller{
 		pg:       pg,
