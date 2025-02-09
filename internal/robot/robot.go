@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/client"
+	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
 	"github.com/jimsmart/grobotstxt"
 )
 
@@ -48,7 +49,13 @@ func (r *InMemoryRobotPolicy) IsAllowed(url *url.URL) bool {
 	mu.Unlock()
 
 	robotTxtStr := robotTxt.(string)
-	return grobotstxt.AgentAllowed(robotTxtStr, "BacklinksBot", url.String())
+	isAllowed := grobotstxt.AgentAllowed(robotTxtStr, "BacklinksBot", url.String())
+	if isAllowed {
+		telemetry.RobotDisallowed.Add(1)
+	} else {
+		telemetry.RobotAllowed.Add(1)
+	}
+	return isAllowed
 }
 
 func (r *InMemoryRobotPolicy) getRobotPolicy(hostname string) string {
