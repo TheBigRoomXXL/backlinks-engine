@@ -80,9 +80,11 @@ func cli(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed init postgres connection pool: %w", err)
 		}
-		fetcher := client.NewCrawlClient(ctx, s.HTTP_RATE_LIMIT, s.HTTP_MAX_RETRY, s.HTTP_TIMEOUT)
+		fetcher := client.NewCrawlClient(ctx, s.HTTP_TIMEOUT)
 		robot := robot.NewInMemoryRobotPolicy(fetcher)
-		crawler := crawler.NewCrawler(ctx, controller, fetcher, robot, s.CRAWLER_MAX_CONCURENCY)
+		crawler := crawler.NewCrawler(
+			ctx, controller, fetcher, robot, s.CRAWLER_MAX_CONCURENCY, s.HTTP_RATE_LIMIT,
+		)
 
 		seeds, err := parseSeeds(os.Args[2:])
 		if err != nil {

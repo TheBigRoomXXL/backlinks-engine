@@ -2,19 +2,13 @@ package client
 
 import (
 	"context"
-	"fmt"
-	"math"
 	"net"
 	"net/http"
-	"slices"
-	"sync"
 	"time"
 
-	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
-	"golang.org/x/time/rate"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
-
-var retryStatus = []int{408, 425, 429, 500, 502, 503, 504}
 
 type Fetcher interface {
 	Head(url string) (resp *http.Response, err error)
@@ -29,18 +23,12 @@ type Fetcher interface {
 // NOTE: HEAD and GET requests have different request limiters otherwise all GET requests
 // will be stopped by HEAD requests (wich are queued first) instead of working in tandem.
 type CrawlClient struct {
-	ctx          context.Context
-	client       *http.Client
-	rateLimiters *sync.Map
-	rateLimit    rate.Limit
-	retryLimit   int
-	lock         *sync.RWMutex
+	ctx    context.Context
+	client *http.Client
 }
 
 func NewCrawlClient(
 	ctx context.Context,
-	rateLimiter rate.Limit,
-	retryLimit int,
 	timeout time.Duration,
 ) *CrawlClient {
 	transport := &http.Transport{
@@ -50,65 +38,105 @@ func NewCrawlClient(
 			DualStack: true,
 		}).DialContext,
 		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100, // Default: 100
-		MaxIdleConnsPerHost:   2,   // Default: 2
-		IdleConnTimeout:       90 * time.Second,
+		MaxIdleConns:          2000,
+		MaxIdleConnsPerHost:   1,
+		IdleConnTimeout:       10 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
-	c := &CrawlClient{
-		ctx:          ctx,
-		client:       &http.Client{Transport: transport, Timeout: timeout},
-		rateLimiters: &sync.Map{},
-		rateLimit:    rateLimiter,
-		retryLimit:   retryLimit,
-		lock:         &sync.RWMutex{},
+	http_client := &http.Client{Transport: transport, Timeout: timeout}
+
+	inFlightGauge := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "backlinkbot_client_requests_in_flight",
+		Help: "A gauge of in-flight requests for the wrapped client.",
+	})
+
+	counter := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "backlinkbot_client_requests_total",
+			Help: "A counter for requests from the wrapped client.",
+		},
+		[]string{"code", "method"},
+	)
+
+	// dnsLatencyVec uses custom buckets based on expected dns durations.
+	// It has an instance label "event", which is set in the
+	// DNSStart and DNSDonehook functions defined in the
+	// InstrumentTrace struct below.
+	dnsLatencyVec := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "backlinkbot_client_dns_duration_seconds",
+			Help:    "Trace dns latency histogram.",
+			Buckets: []float64{.005, .01, .025, .05},
+		},
+		[]string{"event"},
+	)
+
+	// tlsLatencyVec uses custom buckets based on expected tls durations.
+	// It has an instance label "event", which is set in the
+	// TLSHandshakeStart and TLSHandshakeDone hook functions defined in the
+	// InstrumentTrace struct below.
+	tlsLatencyVec := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "backlinkbot_client_tls_duration_seconds",
+			Help:    "Trace tls latency histogram.",
+			Buckets: []float64{.05, .1, .25, .5},
+		},
+		[]string{"event"},
+	)
+
+	// histVec has no labels, making it a zero-dimensional ObserverVec.
+	histVec := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "request_duration_seconds",
+			Help:    "A histogram of request latencies.",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{},
+	)
+
+	// Register all of the metrics in the standard registry.
+	prometheus.MustRegister(counter, tlsLatencyVec, dnsLatencyVec, histVec, inFlightGauge)
+
+	// Define functions for the available httptrace.ClientTrace hook
+	// functions that we want to instrument.
+	trace := &promhttp.InstrumentTrace{
+		DNSStart: func(t float64) {
+			dnsLatencyVec.WithLabelValues("dns_start").Observe(t)
+		},
+		DNSDone: func(t float64) {
+			dnsLatencyVec.WithLabelValues("dns_done").Observe(t)
+		},
+		TLSHandshakeStart: func(t float64) {
+			tlsLatencyVec.WithLabelValues("tls_handshake_start").Observe(t)
+		},
+		TLSHandshakeDone: func(t float64) {
+			tlsLatencyVec.WithLabelValues("tls_handshake_done").Observe(t)
+		},
 	}
-	return c
+
+	// Wrap the default RoundTripper with middleware.
+	roundTripper := promhttp.InstrumentRoundTripperInFlight(inFlightGauge,
+		promhttp.InstrumentRoundTripperCounter(counter,
+			promhttp.InstrumentRoundTripperTrace(trace,
+				promhttp.InstrumentRoundTripperDuration(histVec, http.DefaultTransport),
+			),
+		),
+	)
+
+	// Set the RoundTripper on our client.
+	http_client.Transport = roundTripper
+
+	return &CrawlClient{
+		ctx:    ctx,
+		client: http_client,
+	}
 }
 
 func (c *CrawlClient) Do(req *http.Request) (*http.Response, error) {
-	v, _ := c.rateLimiters.LoadOrStore(req.Method+req.Host, rate.NewLimiter(c.rateLimit, 1))
-	rateLimiter := v.(*rate.Limiter)
-
-	err := rateLimiter.Wait(c.ctx) // This is a blocking call. Honors the rate limit
-	if err != nil {
-		return nil, fmt.Errorf("error while waiting for rate limit: %w", err)
-	}
-
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
-	}
-
-	// Dynamically adjust rate limit
-	if resp.StatusCode == 429 {
-		rateLimiter.SetLimit(rateLimiter.Limit() / 2) // Limit is a frequency so we divide,
-	}
-
-	// Automatically retry with exponential backoff based on the current rate limit
-	if slices.Contains(retryStatus, resp.StatusCode) {
-		for retry := 0; retry < c.retryLimit; retry++ {
-			backoff := exponentialBackoff(rateLimiter.Limit(), retry)
-			err = commons.Delay(c.ctx, time.Duration(backoff*float64(time.Second)))
-			if err != nil {
-				return nil, fmt.Errorf("error while waiting for delay between retries: %w", err)
-			}
-
-			err = rateLimiter.Wait(c.ctx)
-			if err != nil {
-				return nil, fmt.Errorf("error while waiting for rate limit: %w", err)
-			}
-
-			resp, err = c.client.Do(req)
-			if err != nil {
-				return nil, fmt.Errorf("error after %d retry: %w", retry, err)
-			}
-
-			if !slices.Contains(retryStatus, resp.StatusCode) {
-				break
-			}
-		}
 	}
 	return resp, nil
 }
@@ -129,11 +157,4 @@ func (c *CrawlClient) Head(url string) (resp *http.Response, err error) {
 	}
 	req.Header.Set("User-Agent", "BacklinksBot")
 	return c.Do(req)
-}
-
-// Return the duration for next retry based on an exponential of the rate limit
-func exponentialBackoff(limit rate.Limit, retry int) float64 {
-	// Limit is a frequency but we want the periode so we need the inverse.
-	retryPeriode := 1 / float64(limit)
-	return retryPeriode * math.Pow10(retry)
 }

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -17,6 +18,7 @@ import (
 	controllerpkg "github.com/TheBigRoomXXL/backlinks-engine/internal/controller"
 	robotpkg "github.com/TheBigRoomXXL/backlinks-engine/internal/robot"
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/telemetry"
+	"golang.org/x/time/rate"
 )
 
 type Crawler struct {
@@ -25,6 +27,8 @@ type Crawler struct {
 	fetcher         clientpkg.Fetcher
 	robot           robotpkg.RobotPolicy
 	concurencyLimit int
+	rateLimiters    *sync.Map
+	rateLimit       rate.Limit
 }
 
 func NewCrawler(
@@ -33,6 +37,7 @@ func NewCrawler(
 	fetcher clientpkg.Fetcher,
 	robot robotpkg.RobotPolicy,
 	max_concurency int,
+	rateLimit rate.Limit,
 ) *Crawler {
 
 	return &Crawler{
@@ -41,6 +46,8 @@ func NewCrawler(
 		fetcher:         fetcher,
 		robot:           robot,
 		concurencyLimit: max_concurency,
+		rateLimiters:    &sync.Map{},
+		rateLimit:       rateLimit,
 	}
 }
 
@@ -75,61 +82,51 @@ func (c *Crawler) crawlNextPage() {
 	defer telemetry.ProcessedURL.Add(1)
 
 	pageUrl := c.controller.Next()
-	t1 := time.Now()
-	telemetry.NextDuration.Observe(t1.Sub(t0).Seconds())
 
-	isAllowed := !c.robot.IsAllowed(pageUrl)
+	isAllowed := c.robot.IsAllowed(pageUrl)
 
-	if isAllowed {
-		telemetry.RobotDisallowed.Add(1)
-		telemetry.RobotDuration.Observe(time.Since(t1).Seconds())
+	if !isAllowed {
 		return
 	}
-	telemetry.RobotAllowed.Add(1)
-	t2 := time.Now()
-	telemetry.RobotDuration.Observe(t2.Sub(t1).Seconds())
+
+	err := c.WaitForRateLimit("HEAD", pageUrl.Host)
+	if err != nil {
+		slog.Error(fmt.Sprintf("error while waiting for rate limit: %s", err))
+		return
+	}
 
 	pageUrlStr := pageUrl.String()
 	resp, err := c.fetcher.Head(pageUrlStr)
 	if err != nil {
 		slog.Error(err.Error())
-		telemetry.HeadDuration.Observe(time.Since(t2).Seconds())
 		return
 	}
 	resp.Body.Close()
-	t3 := time.Now()
-	telemetry.HeadDuration.Observe(t3.Sub(t2).Seconds())
+
+	if resp.StatusCode == 429 {
+		c.IncreaseRateLimit(pageUrl.Host)
+	}
 
 	if err := isResponsesCrawlable(resp); err != nil {
 		slog.Warn(fmt.Sprintf("uncrawlable response from HEAD %s: %s", pageUrlStr, err))
-		telemetry.IsCrawlableDuration1.Observe(time.Since(t3).Seconds())
 		return
 	}
-	t4 := time.Now()
-	telemetry.IsCrawlableDuration1.Observe(t4.Sub(t3).Seconds())
 
 	resp, err = c.fetcher.Get(pageUrlStr)
 	if err != nil {
-		telemetry.GetDuration.Observe(time.Since(t4).Seconds())
 		slog.Error(err.Error())
 		return
 	}
 	defer resp.Body.Close()
-	t5 := time.Now()
-	telemetry.GetDuration.Observe(t5.Sub(t4).Seconds())
 
 	// We double check in case the HEAD response was not representative
 	if err := isResponsesCrawlable(resp); err != nil {
-		telemetry.IsCrawlableDuration2.Observe(time.Since(t5).Seconds())
 		slog.Warn(fmt.Sprintf("uncrawlable response from GET %s: %s", pageUrlStr, err))
 		return
 	}
-	t6 := time.Now()
-	telemetry.IsCrawlableDuration2.Observe(t6.Sub(t5).Seconds())
 
 	links, err := extractLinks(resp)
 	if err != nil {
-		telemetry.ExtractLinksDuration.Observe(time.Since(t6).Seconds())
 		slog.Error(err.Error())
 		return
 	}
@@ -138,15 +135,28 @@ func (c *Crawler) crawlNextPage() {
 	for _, link := range links {
 		linkSet[link.String()] = link
 	}
-	t7 := time.Now()
-	telemetry.ExtractLinksDuration.Observe(t7.Sub(t6).Seconds())
 
 	c.controller.Add(&commons.LinkGroup{
 		From: pageUrl,
 		To:   slices.Collect(maps.Values(linkSet)),
 	})
-	telemetry.AddDuration.Observe(time.Since(t7).Seconds())
-	telemetry.Links.Add(int64(len(linkSet)))
+}
+
+func (c *Crawler) WaitForRateLimit(method string, host string) error {
+	v, _ := c.rateLimiters.LoadOrStore(method+"-"+host, rate.NewLimiter(c.rateLimit, 1))
+	rateLimiter := v.(*rate.Limiter)
+
+	return rateLimiter.Wait(c.ctx)
+}
+
+func (c *Crawler) IncreaseRateLimit(host string) {
+	v, _ := c.rateLimiters.LoadOrStore("HEAD-"+host, rate.NewLimiter(c.rateLimit, 1))
+	rateLimiter := v.(*rate.Limiter)
+	rateLimiter.SetLimit(rateLimiter.Limit() / 2) // Limit is a frequency so we divide
+
+	v, _ = c.rateLimiters.LoadOrStore("GET-"+host, rate.NewLimiter(c.rateLimit, 1))
+	rateLimiter = v.(*rate.Limiter)
+	rateLimiter.SetLimit(rateLimiter.Limit() / 2) // Limit is a frequency so we divide
 }
 
 func isResponsesCrawlable(resp *http.Response) error {
