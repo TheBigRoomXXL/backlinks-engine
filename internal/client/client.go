@@ -47,14 +47,16 @@ func NewCrawlClient(
 	http_client := &http.Client{Transport: transport, Timeout: timeout}
 
 	inFlightGauge := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "backlinkbot_client_requests_in_flight",
-		Help: "A gauge of in-flight requests for the wrapped client.",
+		Namespace: "backlinkbot",
+		Name:      "requests_in_flight",
+		Help:      "A gauge of in-flight requests for the wrapped client.",
 	})
 
 	counter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "backlinkbot_client_requests_total",
-			Help: "A counter for requests from the wrapped client.",
+			Namespace: "backlinkbot",
+			Name:      "requests_total",
+			Help:      "A counter for requests from the wrapped client.",
 		},
 		[]string{"code", "method"},
 	)
@@ -65,9 +67,10 @@ func NewCrawlClient(
 	// InstrumentTrace struct below.
 	dnsLatencyVec := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "backlinkbot_client_dns_duration_seconds",
-			Help:    "Trace dns latency histogram.",
-			Buckets: []float64{.005, .01, .025, .05},
+			Namespace: "backlinkbot",
+			Name:      "dns_duration_seconds",
+			Help:      "Trace dns latency histogram.",
+			Buckets:   []float64{.005, .01, .025, .05},
 		},
 		[]string{"event"},
 	)
@@ -78,9 +81,10 @@ func NewCrawlClient(
 	// InstrumentTrace struct below.
 	tlsLatencyVec := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "backlinkbot_client_tls_duration_seconds",
-			Help:    "Trace tls latency histogram.",
-			Buckets: []float64{.05, .1, .25, .5},
+			Namespace: "backlinkbot",
+			Name:      "tls_duration_seconds",
+			Help:      "Trace tls latency histogram.",
+			Buckets:   []float64{.05, .1, .25, .5},
 		},
 		[]string{"event"},
 	)
@@ -88,9 +92,10 @@ func NewCrawlClient(
 	// histVec has no labels, making it a zero-dimensional ObserverVec.
 	histVec := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "request_duration_seconds",
-			Help:    "A histogram of request latencies.",
-			Buckets: prometheus.DefBuckets,
+			Namespace: "backlinkbot",
+			Name:      "conds",
+			Help:      "A histogram of request latencies.",
+			Buckets:   prometheus.DefBuckets,
 		},
 		[]string{},
 	)
