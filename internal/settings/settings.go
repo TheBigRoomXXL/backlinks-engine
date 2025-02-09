@@ -83,13 +83,13 @@ func initSettings() {
 	var httpTimeout time.Duration
 	httpTimeoutStr, ok := os.LookupEnv("HTTP_TIMEOUT")
 	if !ok {
-		httpTimeout = 180 * time.Second // Google Timeout
+		httpTimeout = 30 * time.Second
 	} else {
 		i, err := strconv.Atoi(httpTimeoutStr)
 		if err != nil {
 			initOk = false
-			slog.Warn("failed to parse HTTP_TIMEOUT as an int (defaulting to 180s) : " + err.Error())
-			i = 180
+			slog.Warn("failed to parse HTTP_TIMEOUT as an int (defaulting to 30s) : " + err.Error())
+			i = 30
 		}
 		httpTimeout = time.Duration(i * int(time.Second))
 	}
