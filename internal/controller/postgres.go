@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -84,6 +83,8 @@ func initDatabase() {
 
 				PRIMARY KEY (source, target)
 			);
+
+			CREATE EXTENSION IF NOT EXISTS tsm_system_rows;
 		`)
 	if err != nil {
 		initError = fmt.Errorf("failed to initialize postgres tables: %w", err)
@@ -155,25 +156,4 @@ func insertLinks(ctx context.Context, db *pgxpool.Pool, links []commons.Link) {
 
 func updatePages(ctx context.Context, db *pgxpool.Pool, pages []*url.URL) {
 	// TODO: what do we want to save? status, hash, cache?
-}
-
-func selectNextPages(ctx context.Context, db *pgxpool.Pool) (pgx.Rows, error) {
-	query := `
-		WITH next_pages AS (
-			SELECT DISTINCT ON (host_reversed) id
-			FROM pages
-			WHERE latest_visit IS NULL
-			LIMIT 8192
-		)
-		UPDATE pages
-		SET latest_visit = NOW()
-		FROM next_pages
-		WHERE pages.id = next_pages.id
-		RETURNING scheme, host_reversed, path;
-	`
-
-	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
-	defer cancel()
-
-	return db.Query(ctx, query)
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/commons"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -18,7 +19,7 @@ type Controller struct {
 	pg       *pgxpool.Pool
 	ctx      context.Context
 	addChan  chan *commons.LinkGroup
-	nextChan chan *url.URL
+	nextChan chan []*url.URL
 }
 
 func NewController(ctx context.Context, pgURI string) (*Controller, error) {
@@ -27,7 +28,7 @@ func NewController(ctx context.Context, pgURI string) (*Controller, error) {
 		return nil, fmt.Errorf("failed to init postgres connection pool: %w", err)
 	}
 	addChan := make(chan *commons.LinkGroup)
-	nextChan := make(chan *url.URL, 8192)
+	nextChan := make(chan []*url.URL, 2048)
 
 	c := &Controller{
 		pg:       pg,
@@ -46,7 +47,7 @@ func (c *Controller) Add(group *commons.LinkGroup) {
 	c.addChan <- group
 }
 
-func (c *Controller) Next() *url.URL {
+func (c *Controller) Next() []*url.URL {
 	return <-c.nextChan
 }
 
@@ -56,7 +57,29 @@ func (c *Controller) Seed(seeds []*url.URL) {
 
 func (c *Controller) nextProducer() {
 	for {
-		rows, err := selectNextPages(c.ctx, c.pg)
+		query := `
+		WITH random_host as (
+			SELECT host_reversed
+			FROM pages TABLESAMPLE SYSTEM_ROWS(1)
+		),
+		next_pages AS (
+			SELECT id
+			FROM pages, random_host
+			WHERE latest_visit IS NULL
+			AND pages.host_reversed = random_host.host_reversed
+			LIMIT 128
+		)
+		UPDATE pages
+		SET latest_visit = NOW()
+		FROM next_pages
+		WHERE pages.id = next_pages.id
+		RETURNING scheme, host_reversed, path;
+	`
+
+		ctx, cancel := context.WithTimeout(c.ctx, time.Second*30)
+		defer cancel()
+
+		rows, err := c.pg.Query(ctx, query)
 		if err != nil {
 			if strings.Contains(err.Error(), "context canceled") {
 				slog.Warn("context canceled in planner, exiting.")
@@ -67,26 +90,28 @@ func (c *Controller) nextProducer() {
 		}
 		defer rows.Close()
 
-		for rows.Next() {
-			// Marshall the url
+		urls, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (*url.URL, error) {
 			var scheme string
 			var hostReversed string
 			var path string
 			err := rows.Scan(&scheme, &hostReversed, &path)
 			if err != nil {
-				slog.Error(fmt.Sprintf("error in planner: unable to scan row: %s", err))
-				continue
+				return nil, err
 			}
 			host := commons.ReverseHostname(hostReversed)
-			url := &url.URL{Scheme: scheme, Host: host, Path: path}
+			return &url.URL{Scheme: scheme, Host: host, Path: path}, nil
+		})
+		if err != nil {
+			slog.Error(fmt.Sprintf("error in planner: unable to scan row: %s", err))
+			continue
+		}
 
-			// Yield the url or stop if app is shutting down
-			select {
-			case <-c.ctx.Done():
-				close(c.nextChan)
-				return
-			case c.nextChan <- url:
-			}
+		// Yield the url or stop if app is shutting down
+		select {
+		case <-c.ctx.Done():
+			close(c.nextChan)
+			return
+		case c.nextChan <- urls:
 		}
 	}
 }

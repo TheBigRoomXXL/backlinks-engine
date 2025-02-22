@@ -66,22 +66,22 @@ func (c *Crawler) Run() error {
 
 func (c *Crawler) crawlPages() error {
 	for {
-		select {
-		case <-c.ctx.Done():
-			return nil
-		default:
-			c.crawlNextPage()
+		urls := c.controller.Next()
+		for _, url := range urls {
+			select {
+			case <-c.ctx.Done():
+				return nil
+			default:
+				c.crawlPage(url)
+			}
 		}
-
 	}
 }
 
-func (c *Crawler) crawlNextPage() {
+func (c *Crawler) crawlPage(pageUrl *url.URL) {
 	t0 := time.Now()
 	defer func() { telemetry.PageProcessDuration.Observe(time.Since(t0).Seconds()) }()
 	defer telemetry.ProcessedURL.Add(1)
-
-	pageUrl := c.controller.Next()
 
 	isAllowed := c.robot.IsAllowed(pageUrl)
 
