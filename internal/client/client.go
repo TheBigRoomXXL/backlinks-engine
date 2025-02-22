@@ -48,14 +48,14 @@ func NewCrawlClient(
 
 	inFlightGauge := prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "backlinkbot",
-		Name:      "requests_in_flight",
+		Name:      "client_requests_in_flight",
 		Help:      "A gauge of in-flight requests for the wrapped client.",
 	})
 
 	counter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "backlinkbot",
-			Name:      "requests_total",
+			Name:      "client_requests_total",
 			Help:      "A counter for requests from the wrapped client.",
 		},
 		[]string{"code", "method"},
@@ -68,7 +68,7 @@ func NewCrawlClient(
 	dnsLatencyVec := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "backlinkbot",
-			Name:      "dns_duration_seconds",
+			Name:      "client_dns_duration_seconds",
 			Help:      "Trace dns latency histogram.",
 			Buckets:   []float64{.005, .01, .025, .05},
 		},
@@ -82,7 +82,7 @@ func NewCrawlClient(
 	tlsLatencyVec := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "backlinkbot",
-			Name:      "tls_duration_seconds",
+			Name:      "client_tls_duration_seconds",
 			Help:      "Trace tls latency histogram.",
 			Buckets:   []float64{.05, .1, .25, .5},
 		},
@@ -93,7 +93,7 @@ func NewCrawlClient(
 	histVec := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "backlinkbot",
-			Name:      "conds",
+			Name:      "client_conds",
 			Help:      "A histogram of request latencies.",
 			Buckets:   prometheus.DefBuckets,
 		},
