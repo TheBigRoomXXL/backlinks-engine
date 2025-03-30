@@ -4,6 +4,7 @@ services:
     container_name: clickhouse
     ports:
       - "${DB_PORT}:9000"  # Native interface without tls
+      - "8123:8123"        # HTTP interface
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_config:/etc/clickhouse-server
