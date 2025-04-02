@@ -1,4 +1,5 @@
-# Backlink Engine
+# Backlink Engine 
+## This project is a work in progress
 
 > The goal of this project is to enable two-way navigation on the web via backlinks. To pursue this goal, I must create an exhaustive page-level webgraph. This repository provides the tools to do so.
 
