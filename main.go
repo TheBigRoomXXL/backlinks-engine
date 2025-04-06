@@ -14,7 +14,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	p.Run()
 	err = p.Seed(os.Args[1])
 	if err != nil {
 		log.Fatal(err)

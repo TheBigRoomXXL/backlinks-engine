@@ -1,45 +1,33 @@
 package planner
 
 import (
-	"context"
+	"database/sql"
 	"fmt"
+	"log"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	_ "github.com/marcboeker/go-duckdb/v2"
 )
 
-func initDb(s *Settings) (driver.Conn, error) {
-	conn, err := clickhouse.Open(&clickhouse.Options{
-		Addr: []string{fmt.Sprintf("%s:%s", s.DB_HOSTNAME, s.DB_PORT)},
-		Auth: clickhouse.Auth{
-			Database: s.DB_NAME,
-			Username: s.DB_USER,
-			Password: s.DB_PASSWORD,
-		},
-		Debugf: func(format string, v ...interface{}) {
-			fmt.Printf(format, v)
-		},
-	})
-
+func initDb() (*sql.DB, error) {
+	db, err := sql.Open("duckdb", "")
 	if err != nil {
-		return nil, fmt.Errorf("failed to init connection to database: %w", err)
+		log.Fatal(err)
 	}
 
-	query := `CREATE TABLE IF NOT EXISTS pages
-	(
-		id UUID DEFAULT generateUUIDv4(),
-		protocol Enum('http', 'https'),
-		host String,
-		path String,
-		last_visited_at Nullable(DateTime),
-	)
-	ENGINE = ReplacingMergeTree()
-	ORDER BY (host, path)
+	query := `
+	CREATE SEQUENCE IF NOT EXISTS seq_page_id;
+	CREATE TABLE IF NOT EXISTS pages (
+		id BIGINT PRIMARY KEY DEFAULT nextval('seq_page_id'),
+		protocol TEXT NOT NULL CHECK (protocol IN ('http', 'https')),
+		host TEXT NOT NULL,
+		path TEXT NOT NULL,
+		last_visited_at TIMESTAMP
+	);
 	`
 
-	if err := conn.Exec(context.Background(), query); err != nil {
+	if _, err := db.Exec(query); err != nil {
 		return nil, fmt.Errorf("failed to create necessary tables: %w", err)
 	}
 
-	return conn, nil
+	return db, nil
 }

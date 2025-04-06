@@ -2,25 +2,18 @@ package planner
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"log"
-
-	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
 
 type Planner struct {
 	ctx context.Context
-	db  driver.Conn
+	db  *sql.DB
 }
 
 func New() (*Planner, error) {
 	ctx := context.Background()
-	s, err := newSettings()
-	if err != nil {
-		return nil, fmt.Errorf("failed to init planner settings: %w", err)
-	}
-
-	db, err := initDb(s)
+	db, err := initDb()
 	if err != nil {
 		return nil, fmt.Errorf("failed to init planner database: %w", err)
 	}
@@ -31,31 +24,14 @@ func New() (*Planner, error) {
 	}, nil
 }
 
-func (p *Planner) Run() {
-	rows, err := p.db.Query(p.ctx, "SELECT name,toString(uuid) as uuid_str FROM system.tables LIMIT 5")
-	if err != nil {
-		log.Fatal(err)
-	}
-	for rows.Next() {
-		var name, uuid string
-		if err := rows.Scan(&name, &uuid); err != nil {
-			log.Fatal(err)
-		}
-		log.Printf("name: %s, uuid: %s", name, uuid)
-	}
-}
-
 func (p *Planner) Seed(seed string) error {
-	query := `INSERT INTO pages (protocol, host, path, last_visited_at) VALUES (?, ?, ?, ?)`
-	err := p.db.Exec(p.ctx, query,
-		"https", // protocol
-		seed,    // host
-		"/",     // path
-		nil,     // last_visited_at
+	_, err := p.db.Exec(
+		"INSERT INTO pages (protocol, host, path, last_visited_at) VALUES (?, ?, ?, ?)",
+		"https", seed, "/", nil,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to seed db: %w", err)
 	}
-	fmt.Printf("inserted seed %s", seed)
+	fmt.Printf("inserted seed %s\n", seed)
 	return nil
 }

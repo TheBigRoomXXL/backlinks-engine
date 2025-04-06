@@ -19,17 +19,16 @@ RUN mv /tmp/libduckdb/libduckdb.so /usr/lib/
 
 RUN useradd -ms /bin/bash dev
 USER dev
-WORKDIR /home/dev/
+WORKDIR /home/dev/be/
 
 COPY go.* .
 RUN go mod download
 
-COPY main.go .
-COPY internal/ ./internal/
 
 ENV LD_LIBRARY_PATH=/usr/lib/
 ENV CGO_ENABLED=1
 ENV CGO_LDFLAGS="-L/tmp/libduckdb"
-CMD ["go", "run" ,"-tags=duckdb_use_lib", "."]
+ENV GOCACHE="/home/dev/be/.cache"
+ENTRYPOINT ["go", "run" ,"-tags=duckdb_use_lib", "."]
 
 
