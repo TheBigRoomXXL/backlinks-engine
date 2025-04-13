@@ -21,7 +21,7 @@ func initDb() (*sql.DB, error) {
 		protocol TEXT NOT NULL CHECK (protocol IN ('http', 'https')),
 		host TEXT NOT NULL,
 		path TEXT NOT NULL,
-		last_visited_at TIMESTAMP
+		visited_at TIMESTAMP
 	);
 	CREATE UNIQUE INDEX IF NOT EXISTS pages_host_path_idx ON pages (host,path);
 	`
