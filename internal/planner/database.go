@@ -9,7 +9,7 @@ import (
 )
 
 func initDb() (*sql.DB, error) {
-	db, err := sql.Open("duckdb", "")
+	db, err := sql.Open("duckdb", "backlinks.db")
 	if err != nil {
 		log.Fatal(err)
 	}
