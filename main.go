@@ -1,21 +1,30 @@
 package main
 
 import (
-	"fmt"
+	"flag"
 	"log"
-	"os"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/planner"
 )
 
+var seedsCSVPath string
+
+func init() {
+	flag.StringVar(&seedsCSVPath, "seeds", "", "Path to a CSV with a list of pages")
+}
+
 func main() {
-	fmt.Println("Let's do it again.")
+	flag.Parse()
+
 	p, err := planner.New()
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = p.Seed(os.Args[1])
-	if err != nil {
-		log.Fatal(err)
+
+	if seedsCSVPath != "" {
+		err = p.Seed(seedsCSVPath)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }

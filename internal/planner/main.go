@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
+	"os"
+	"strings"
 )
 
 type Planner struct {
@@ -24,14 +27,27 @@ func New() (*Planner, error) {
 	}, nil
 }
 
-func (p *Planner) Seed(seed string) error {
-	_, err := p.db.Exec(
-		"INSERT INTO pages (protocol, host, path, last_visited_at) VALUES (?, ?, ?, ?)",
-		"https", seed, "/", nil,
-	)
+// This function expect a CSV file with a list of whitespace separated hosts.
+func (p *Planner) Seed(seedsPath string) error {
+	file, err := os.Open(seedsPath)
 	if err != nil {
-		return fmt.Errorf("failed to seed db: %w", err)
+		return fmt.Errorf("failed to seed the database: %w", err)
 	}
-	fmt.Printf("inserted seed %s\n", seed)
-	return nil
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return fmt.Errorf("failed to seed the database: %w", err)
+	}
+	hosts := strings.Fields(string(content))
+	valueStrings := make([]string, len(hosts))
+	args := make([]interface{}, len(hosts))
+	for i := 0; i < len(hosts); i++ {
+		valueStrings[i] = "('https', ?, '/')"
+		args[i] = hosts[i]
+	}
+	stmt := fmt.Sprintf(
+		"INSERT INTO pages (protocol, host,path) VALUES %s",
+		strings.Join(valueStrings, ","),
+	)
+	_, err = p.db.Exec(stmt, args...)
+	return err
 }
