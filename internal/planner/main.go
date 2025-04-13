@@ -45,7 +45,7 @@ func (p *Planner) Seed(seedsPath string) error {
 		args[i] = hosts[i]
 	}
 	stmt := fmt.Sprintf(
-		"INSERT INTO pages (protocol, host,path) VALUES %s",
+		"INSERT OR IGNORE INTO pages (protocol, host,path) VALUES %s",
 		strings.Join(valueStrings, ","),
 	)
 	_, err = p.db.Exec(stmt, args...)

@@ -23,6 +23,7 @@ func initDb() (*sql.DB, error) {
 		path TEXT NOT NULL,
 		last_visited_at TIMESTAMP
 	);
+	CREATE UNIQUE INDEX IF NOT EXISTS pages_host_path_idx ON pages (host,path);
 	`
 
 	if _, err := db.Exec(query); err != nil {
