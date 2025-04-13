@@ -1,17 +1,21 @@
-package planner
+package shared
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
+	"sync"
 
 	_ "github.com/marcboeker/go-duckdb/v2"
 )
 
-func initDb() (*sql.DB, error) {
-	db, err := sql.Open("duckdb", "backlinks.db")
+var once sync.Once
+var db *sql.DB
+
+func initDb() {
+	var err error
+	db, err = sql.Open("duckdb", "backlinks.db")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("failed to init database: %s\n", err)
 	}
 
 	query := `
@@ -24,11 +28,21 @@ func initDb() (*sql.DB, error) {
 		visited_at TIMESTAMP
 	);
 	CREATE UNIQUE INDEX IF NOT EXISTS pages_host_path_idx ON pages (host,path);
+	
+	CREATE OR REPLACE VIEW hosts AS
+	SELECT 
+		host,
+		SUM(CASE WHEN last_visited_at IS NULL THEN 1 ELSE 0 END) AS unvisited_count
+	FROM pages
+	GROUP BY host;
 	`
 
 	if _, err := db.Exec(query); err != nil {
-		return nil, fmt.Errorf("failed to create necessary tables: %w", err)
+		log.Fatalf("failed to init database: %s\n", err)
 	}
+}
 
-	return db, nil
+func GetDatabase() *sql.DB {
+	once.Do(initDb)
+	return db
 }
