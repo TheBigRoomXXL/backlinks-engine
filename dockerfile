@@ -4,7 +4,7 @@
 # Build: docker build -t be . 
 # Run: docker run -v /home/sebastien/.cache/go-build/:/home/dev/.cache/go-build/ be
 
-FROM golang:1.24 AS builder
+FROM golang:1.24
 
 ARG CPU_ARCH=amd64
 ARG DUCKDB_VERSION=v1.2.1
