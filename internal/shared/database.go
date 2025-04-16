@@ -32,7 +32,7 @@ func initDb() {
 	CREATE OR REPLACE VIEW hosts AS
 	SELECT 
 		host,
-		SUM(CASE WHEN last_visited_at IS NULL THEN 1 ELSE 0 END) AS unvisited_count
+		SUM(CASE WHEN visited_at IS NULL THEN 1 ELSE 0 END) AS unvisited_count
 	FROM pages
 	GROUP BY host;
 	`

@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 
 	"github.com/TheBigRoomXXL/backlinks-engine/internal/planner"
@@ -27,8 +26,12 @@ func main() {
 	}
 
 	task := p.NextCrawl()
-	fmt.Println(task.Host)
+	if task == nil {
+		log.Println("No tasks available")
+		return
+	}
+	log.Println(task.Host)
 	for _, p := range task.Pages {
-		fmt.Printf("- %s\n", p.String())
+		log.Printf("- %s\n", p.String())
 	}
 }

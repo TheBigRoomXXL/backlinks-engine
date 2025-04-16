@@ -72,7 +72,7 @@ func (p *Planner) NextCrawl() *CrawlTask {
 	rows, err := p.db.Query(`
 		SELECT protocol, host, path
 		FROM pages WHERE host = $1
-		ORDER BY last_visited_at ASC NULLS FIRST;`,
+		ORDER BY visited_at ASC NULLS FIRST;`,
 		nextHost,
 	)
 	if err != nil {
